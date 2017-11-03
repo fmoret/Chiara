@@ -109,7 +109,7 @@ class ADMM_Master:
     def _init_prosumers(self):
         # Only build submodels if they don't exist or a rebuild is forced.
         if not hasattr(self, 'submodels_pros'):
-            self.submodels_pros = {i: ADMM_Pros(self, idx=i) for i in range(self.params.num_pros)}
+            self.submodels_pros = {i: ADMM_Pros(self, idx=i) for i in range(self.params.num_pros)} #dizionarioooo
                                    
     def _model_update(self, t):
         self._build_variables()
@@ -251,4 +251,6 @@ class ADMM_Master:
         sys.stdout = self.stdold
         del self.model
         [self.submodels_pros.get(sm).clean() for sm in self.submodels_pros.keys()]
-         
+        
+    def balancing(self):
+        return
