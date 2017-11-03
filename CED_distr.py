@@ -9,9 +9,8 @@ import gurobipy as gb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-dd1 = 'C:/Users/Chiara/Desktop/special_course/branches/balancing'
-dd2 = 'C:/Users/Chiara/Desktop/special_course/trunk/Input Data 2'
-os.chdir(dd1)
+%dd1 = 'M:/PhD/Chiara/branches/balancing'
+%dd2 = 'M:/PhD/Chiara/trunk/Input Data 2'os.chdir(dd1)
 
 #%%
 os.chdir(dd2)
