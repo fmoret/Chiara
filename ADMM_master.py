@@ -149,7 +149,7 @@ class ADMM_Master:
             while (np.linalg.norm(real_rk)>self.data.tol or self.variables.s_k>self.data.tol) and self.variables.iter<10000 and np.linalg.norm(real_rk)<10**10: #np.linalg.norm
                 self.variables.iter = self.variables.iter +1
                 
-                #Solve subproblems
+                #Solve subproblems - QUI CI SONO I RISULTATI
                 for j in range(self.params.num_pros):
                     sol = self.submodels_pros[j].optimize()
                     self.variables.p_k[self.temp,j] = np.copy(sol[:,0]) 
