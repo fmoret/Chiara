@@ -9,10 +9,13 @@ import gurobipy as gb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-%dd1 = 'M:/PhD/Chiara/branches/balancing'
-%dd2 = 'M:/PhD/Chiara/trunk/Input Data 2'os.chdir(dd1)
+#%dd1 = 'M:/PhD/Chiara/branches/balancing'
+#%dd2 = 'M:/PhD/Chiara/trunk/Input Data 2'os.chdir(dd1)
+dd1 = 'C:/Users/Chiara/Desktop/special_course/branches/balancing'
+dd2 = 'C:/Users/Chiara/Desktop/special_course/trunk/Input Data 2'
+os.chdir(dd1)
 
-#%%
+#%% CED - definition of parameters and utility and cost curves
 os.chdir(dd2)
 import shelve
 filename='input_data_2.out'
@@ -24,7 +27,7 @@ b1 = d['b1']
 c1 = d['c1']
 Pmin = d['Pmin']
 Pmax = d['Pmax']
-PV = d['PV']       # non mi carica il PV
+PV = d['PV']       
 Load = d['Load']
 Flex_load = d['Flex_load']
 Agg_load = Load + Flex_load
@@ -44,7 +47,9 @@ window = 4
 y0_c = 0.01 + b2 - c2*(Lmax+Lmin)/(Lmax-Lmin)
 mm_c = 2*c2/(Lmax-Lmin)
 if sum(abs(mm_c[np.isinf(mm_c)]))>0:    # se trova degli inf
+    #coefficiente angolare
     y0_c[np.isinf(abs(mm_c))] = 0.01 + b2[np.isinf(abs(mm_c))]  # porta questo a 0.01 + b2
+    #intercetta
     mm_c[np.isinf(abs(mm_c))] = 0                               # e questo a 0
 
 y0_g = 0.01 + b1 - c1*(Pmax+Pmin)/(Pmax-Pmin)
@@ -55,6 +60,7 @@ if sum(abs(mm_g[np.isinf(mm_g)]))>0:
 y0_g[np.isnan(y0_g)] = 0        # se non produco il mio costo è 0
 mm_g[np.isnan(mm_g)] = 0
      
+
 #%% Community CENTRALIZED solution
 CT_p_sol = np.zeros((g,TMST))
 CT_l_sol = np.zeros((n,TMST))
@@ -154,7 +160,7 @@ CT_IE_sol = CT_imp_sol - CT_exp_sol
 #       a[x]=d["string{0}".format(x)]
 
 
-#%% ADMM optimisation via master-sub classes
+#%% ADMM optimisation CED via master-sub classes
 from ADMM_master import ADMM_Master
 o = 0.01
 e = 0.00001
@@ -166,6 +172,79 @@ Mast = ADMM_Master(b1, c1, Pmin, Pmax, PV, b2, c2, Load, Flex_load, tau, el_pric
 ADMM_summary = Mast.results
 ADMM_prices = Mast.prices
 ADMM_flag = Mast.flag
+
+#%% BAL - definition of parameters and utility and cost curves
+
+os.chdir(dd2)
+import shelve
+filename='input_data_2.out'
+d = shelve.open(filename, 'r')
+el_price = d['tot_el_price'][0::2]/1000
+b2 = d['b2']        
+c2 = d['c2']      
+b1 = d['b1']
+c1 = d['c1']
+Pmin = d['Pmin']
+Pmax = d['Pmax']
+PV = d['PV']     
+noise_PV = np.random.normal(0,0.1,(PV.shape))
+PV_real = Pv + noise_PV
+Load = d['Load']
+noise_Load = np.random.normal(0,0.1,(Load.shape))
+Load_real = = Load + noise_Load
+Flex_load = d['Flex_load']
+Agg_load = Load + Flex_load
+Agg_load_real =Load_real + Flex_load
+PostCode = d['PostCode']
+os.chdir(dd1)
+n = b2.shape[1]
+g = b1.shape[1]
+TMST = 48#b2.shape[0]
+
+p_tilde = np.empty(1)
+l_tilde = np.empty(1)
+for k in range(15):
+    p_tilde = np.append(p_tilde,ADMM_summary[0]['pow[k]']).reshape(-1,15)      ###FIXXXXXXXXXX
+    l_tilde = np.append(p_tilde,ADMM_summary[0]['load[k]']).reshape(-1,15)     ###FIXXXXXXXXXX 
+
+Lmin = - (Agg_load + Flex_load)
+Lmax = - Load
+old_slope_load = 2*c2/(Lmax-Lmin)
+Lmin = - (Agg_load_real + Flex_load)
+Lmax = - Load_real
+el_price_e = el_price
+tau = 0.1
+window = 4
+
+#utility/cost curves che variano ogni ora, per ogni prosumer        FIXXXX
+y0_c = 0.01 + b2 + (l_tilde-(Lmax-Lmin)/2)*old_slope_load # controlla che sia positivo
+mm_c = 2*c2/(Lmax-Lmin)
+if sum(abs(mm_c[np.isinf(mm_c)]))>0:
+    #coefficiente angolare
+    y0_c[np.isinf(abs(mm_c))] = 0.01 + b2[np.isinf(abs(mm_c))]
+    #intercetta
+    mm_c[np.isinf(abs(mm_c))] = 0
+
+y0_g = 0.01 + b1 + (ptilde-(Pmax-Pmin)/2)*(2*c2/(Pmax-Pmin)) # controlla che sia positivo
+mm_g = 2*c1/(Pmax-Pmin)
+if sum(abs(mm_g[np.isinf(mm_g)]))>0:
+    y0_g[np.isinf(abs(mm_g))] = 0.01 + b1[np.isinf(abs(mm_g))]
+    mm_g[np.isinf(abs(mm_g))] = 0
+y0_g[np.isnan(y0_g)] = 0
+mm_g[np.isnan(mm_g)] = 0
+
+#%% ADMM optimisation BAL via master-sub classes - OK
+from ADMM_master_bal import ADMM_Master_bal
+o = 0.01
+e = 0.00001
+asynch = -100
+weight = 1/n
+
+#% Cost of Import/Export not considered ==> case = 0
+Mast_bal = ADMM_Master_bal(b1, c1, Pmin, Pmax, PV, b2, c2, Load, Flex_load, tau, el_price_e, o, e, TMST, window, 0, asynch)
+ADMM_bal_summary = Mast_bal.results
+ADMM_bal_prices = Mast_bal.prices
+ADMM_bal_flag = Mast_bal.flag
 
 #%%
 max_l = abs(Mast.variables.l_k - np.transpose(CT_l_sol)).max()
