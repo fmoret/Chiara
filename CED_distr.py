@@ -9,18 +9,25 @@ import gurobipy as gb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from pathlib import Path
+import shelve
+
+dd1 = os.getcwd() #os.path.realpath(__file__) #os.getcwd()
+data_path = str(Path(dd1).parent.parent)+r'\trunk\Input Data 2'
+
+filename=data_path+r'\input_data_2.out'
 #%dd1 = 'M:/PhD/Chiara/branches/balancing'
 #%dd2 = 'M:/PhD/Chiara/trunk/Input Data 2'os.chdir(dd1)
-dd1 = 'C:/Users/Chiara/Desktop/special_course/branches/balancing'
-dd2 = 'C:/Users/Chiara/Desktop/special_course/trunk/Input Data 2'
-os.chdir(dd1)
+#dd1 = 'C:/Users/Chiara/Desktop/special_course/branches/balancing'
+#dd2 = 'C:/Users/Chiara/Desktop/special_course/trunk/Input Data 2'
+#os.chdir(dd1)
 
 #%% CED - definition of parameters and utility and cost curves
-os.chdir(dd2)
-import shelve
-filename='input_data_2.out'
+#os.chdir(dd2)
+#import shelve
+#filename='input_data_2.out'
 d = shelve.open(filename, 'r')
-el_price = d['tot_el_price'][0::2]/1000
+el_price = d['tot_el_price']#[0::2]/1000
 b2 = d['b2']        # questi sono i coefficienti dei costi/utilities - quadratic function
 c2 = d['c2']        # 2 si riferisce ai consumers, 1 ai generators
 b1 = d['b1']
@@ -33,7 +40,7 @@ Flex_load = d['Flex_load']
 Agg_load = Load + Flex_load
 PostCode = d['PostCode']
 
-os.chdir(dd1)
+#os.chdir(dd1)
 n = b2.shape[1]
 g = b1.shape[1]
 TMST = 48#b2.shape[0]
@@ -175,9 +182,9 @@ ADMM_flag = Mast.flag
 
 #%% BAL - definition of parameters and utility and cost curves
 
-os.chdir(dd2)
-import shelve
-filename='input_data_2.out'
+#os.chdir(dd2)
+#import shelve
+#filename='input_data_2.out'
 d = shelve.open(filename, 'r')
 el_price = d['tot_el_price'][0::2]/1000
 b2 = d['b2']        
@@ -188,10 +195,10 @@ Pmin = d['Pmin']
 Pmax = d['Pmax']
 PV = d['PV']     
 noise_PV = np.random.normal(0,0.1,(PV.shape))
-PV_real = Pv + noise_PV
+PV_real = PV + noise_PV
 Load = d['Load']
 noise_Load = np.random.normal(0,0.1,(Load.shape))
-Load_real = = Load + noise_Load
+Load_real = Load + noise_Load
 Flex_load = d['Flex_load']
 Agg_load = Load + Flex_load
 Agg_load_real =Load_real + Flex_load
