@@ -25,7 +25,8 @@ class ADMM_Pros_bal:
         self.Pmin = self.MP.data.gen_lb[idx]   
         self.Pmax = self.MP.data.gen_ub[idx]  
         self.PV = self.MP.data.PV[:,idx] # forse questo non serve proprio
-        self.deltaP = self.data.deltaP
+        self.deltaPV = self.data.deltaPV
+        self.deltaLoad = self.data.deltaLoad
         self.goal = self.MP.data.goal[:,idx] 
         b2 = self.MP.data.cons_lin_cost[:,idx]
         c2 = self.MP.data.cons_quad_cost[:,idx]
@@ -107,7 +108,7 @@ class ADMM_Pros_bal:
     def _build_constraint_(self,):
         m = self.model
         for k in range(24):
-            m.addConstr(self.variables.load[k] + self.variables.power[k] + self.variables.q[k] + self.variables.alfa[k] - self.variables.beta[k] == self.data.deltaP[k] - self.data.deltaL[k], name="pow_bal[%s]"%k) 
+            m.addConstr(self.variables.load[k] + self.variables.power[k] + self.variables.q[k] + self.variables.alfa[k] - self.variables.beta[k] == self.data.deltaPV[k] - self.data.deltaLoad[k], name="pow_bal[%s]"%k) 
             m.addConstr(self.variables.q[k] <= self.variables.q_pos[k])
             m.addConstr(self.variables.q[k] >= -self.variables.q_pos[k])
 #        t = self.MP.temp[0]

@@ -19,7 +19,7 @@ class expando(object):
 
 
 class ADMM_Master_bal:
-    def __init__(self, b1, c1, Pmin, Pmax, PV, b2, c2, Load, Flex_load, tau, el_price_e, o, e, time, window, case, threshold):
+    def __init__(self, b1, c1, Pmin, Pmax, PV, b2, c2, Load, Flex_load, deltaPV, deltaLoad, tau, el_price_e, o, e, time, window, case, threshold):
 
         self.data = expando()
         self.variables = expando()
@@ -32,6 +32,8 @@ class ADMM_Master_bal:
         self.data.gen_lb = Pmin
         self.data.gen_ub = Pmax
         self.data.PV = PV
+        self.data.deltaPV = deltaPV
+        self.data.deltaLoad = deltaLoad
         self.data.cons_lin_cost = b2
         self.data.cons_quad_cost = c2
         self.data.cons_ub = - Load
@@ -109,7 +111,7 @@ class ADMM_Master_bal:
     def _init_prosumers(self):
         # Only build submodels if they don't exist or a rebuild is forced.
         if not hasattr(self, 'submodels_pros'):
-            self.submodels_pros = {i: ADMM_Pros_bal(self, idx=i) for i in range(self.params.num_pros)} #dizionarioooo
+            self.submodels_pros = {i: ADMM_Pros_bal(self, idx=i) for i in range(self.params.num_pros)} #dizionario
                                    
     def _model_update(self, t):
         self._build_variables()
