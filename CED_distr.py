@@ -46,7 +46,7 @@ g = b1.shape[1]
 TMST = 48#b2.shape[0]
 
 Lmin = - (Agg_load + Flex_load)
-Lmax = - Load
+Lmax = - Load #baseload
 el_price_e = el_price
 tau = 0.1
 window = 4
@@ -267,7 +267,7 @@ Load_real = Load + noise_Load
 for row in range(Load_real.shape[0]):
     for col in range(Load_real.shape[1]):
         if Load_real[row,col] < 0:
-            PV_real[row,col] = 0
+            Load_real[row,col] = 0
             
 # IMBALANCES
 deltaPV = PV_real - PV
@@ -284,10 +284,14 @@ n = b2.shape[1]
 g = b1.shape[1]
 TMST = 48*4#b2.shape[0] # *4 because now we have 15 mins time intervals
 
+#%%
 # retrieving and extending (1h --> 15min) set points and DA price from DA stage
-p_tilde = np.repeat(p_1, 4, axis=0)
-l_tilde = np.repeat(l_1, 4, axis=0)
-lambda_CED = np.repeat(price_community, 4, axis=0)
+#p_tilde = np.repeat(p_1, 4, axis=0)
+p_tilde = np.repeat(CT_p_sol.T, 4, axis=0)
+#l_tilde = np.repeat(l_1, 4, axis=0)
+l_tilde = np.repeat(CT_l_sol.T, 4, axis=0)
+#lambda_CED = np.repeat(price_community, 4, axis=0)
+lambda_CED = np.repeat(-CT_price2_sol[0,:], 4, axis=0)
 
 # save old Pmax, Pmin, Lmax, Lmin, intercepts and slopes and extend them (they'll be referred to 15 mins time interval)
 Pmax_DA = Pmax
@@ -306,8 +310,8 @@ Lmax_bal = np.zeros((TMST,n))
 Lmin_bal = np.zeros((TMST,n))
 for t in range(TMST):
     for p in range(n):
-        Pmax_bal[t,p] = Pmax_DA[p] - p_tilde[t,p] - PV[t,p]
-        Pmin_bal[t,p] = Pmin_DA[p] - p_tilde[t,p] - PV[t,p]
+        Pmax_bal[t,p] = Pmax_DA[p] + PV[t,p] - p_tilde[t,p] 
+        Pmin_bal[t,p] = Pmin_DA[p] + PV[t,p] - p_tilde[t,p]
         Lmax_bal[t,p] = Lmax_DA[t,p] - l_tilde[t,p]
         Lmin_bal[t,p] = Lmin_DA[t,p] - l_tilde[t,p]
 
@@ -317,17 +321,24 @@ y0_c_bal = np.zeros((TMST,n))
 mm_c_bal = np.zeros((TMST,n))
 y0_g_bal = np.zeros((TMST,n))
 mm_g_bal = np.zeros((TMST,n))
+#y0_c_bal2 = np.zeros((TMST,n))
 # consumers: the intercept is now the DA price, the slope of the curve changes and it's determined by the new Lmax and Lmin
 # intercept
 for t in range(TMST):
     for p in range(n):
         if l_tilde[t,p] == Lmin_DA[t,p]:
-            y0_c_bal[t,p] = b2[t,p] - c2[t,p]
+            y0_c_bal[t,p] = 0.01 + b2[t,p] - c2[t,p]
         elif l_tilde[t,p] == Lmax_DA[t,p]:
-            y0_c_bal[t,p] = b2[t,p] + c2[t,p]
+            y0_c_bal[t,p] = 0.01 + b2[t,p] + c2[t,p]
         else:
-            y0_c_bal[t,p] == lambda_CED[t]
+            y0_c_bal[t,p] = lambda_CED[t]
+
+#        y0_c_bal2[t,p] = y0_c_DA[t,p] + mm_c_DA[t,p]*l_tilde[t,p]
+
+
 # slope (removing the infinite values, rising from dividing by zero)
+
+
 mm_c_bal = 2*c2[:TMST,:]/(Lmax_bal-Lmin_bal)
 if sum(abs(mm_c_bal[np.isinf(mm_c_bal)]))>0:
         y0_c_bal[np.isinf(abs(mm_c_bal))] = 0.01 + b2[np.isinf(abs(mm_c_bal))]
@@ -339,11 +350,11 @@ for t in range(TMST):
 # intercept
     for p in range(n):
         if p_tilde[t,p] - PV[t,p] == Pmin_DA[p]:
-            y0_g_bal[t,p] = b1[t,p] - c1[t,p]
+            y0_g_bal[t,p] = 0.01 + b1[t,p] - c1[t,p]
         elif p_tilde[t,p] - PV[t,p] == Pmax_DA[p]:
-            y0_g_bal[t,p] = b1[t,p] + c1[t,p]
+            y0_g_bal[t,p] = 0.01 + b1[t,p] + c1[t,p]
         else:
-            y0_g_bal[t,p] == lambda_CED[t]
+            y0_g_bal[t,p] = lambda_CED[t]
 # slope (removing the infinite values and the NaN values)
 mm_g_bal = 2*c1[:TMST,:]/(Pmax_bal-Pmin_bal)
 if sum(abs(mm_g_bal[np.isinf(mm_g_bal)]))>0:
@@ -394,7 +405,7 @@ for t in np.arange(0,TMST,96):  # for t = 0, 24
     CT_m = gb.Model("qp")
     CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
     # Create variables
-    p = np.array([CT_m.addVar(lb=Pmin_bal[t,i]+PV[t+k,i], ub=Pmax_bal[t,i]+PV[t+k,i]) for i in range(n) for k in range(96)])
+    p = np.array([CT_m.addVar(lb=Pmin_bal[t,i], ub=Pmax_bal[t,i]) for i in range(n) for k in range(96)])
     l = np.array([CT_m.addVar(lb=Lmin_bal[t+k,i], ub=Lmax_bal[t+k,i]) for i in range(n) for k in range(96)])
     q_imp = np.array([CT_m.addVar() for k in range(96)])
     q_exp = np.array([CT_m.addVar() for k in range(96)])
@@ -431,7 +442,7 @@ for t in np.arange(0,TMST,96):  # for t = 0, 24
         CT_m.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k)) #somma sui prosumer
         #what about mettere una variabile invece che 0? da minimizzare poi nell'obj
         for i in range(n): #balance per ogni prosumer, ogni ora
-            CT_m.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] == deltaPV[k,i] - deltaLoad[k,i], name="pros[%s,%s]"% (k,i))
+            CT_m.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] + deltaPV[k,i] - deltaLoad[k,i] == 0, name="pros[%s,%s]"% (k,i))
             CT_m.addConstr(q[k,i] <= q_pos[k,i]) #limite sulla q, che può essere pos o neg
             CT_m.addConstr(q[k,i] >= -q_pos[k,i])
         CT_m.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
