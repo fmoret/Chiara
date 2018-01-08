@@ -170,8 +170,27 @@ CT_IE_sol = CT_imp_sol - CT_exp_sol
 
 
 #m = err
+limit_comply_consumption = (CT_l_sol.T<=Lmax[:48,:])&(CT_l_sol.T>=Lmin[:48,:])
+limit_comply_production = np.zeros([48,15])
+for p in range(15):
+    for t in range(48):
+        limit_comply_production[t,p] = (CT_p_sol.T[t,p]-PV[t,p]<=Pmax[p])&(CT_p_sol.T[t,p]-PV[t,p]>=Pmin[p])
 
-
+#the next one does'nt work
+price_comply = np.zeros([48,15])
+case = np.zeros([48,15])
+for p in range(15):
+    for t in range(48):
+        if (CT_price2_sol[0,t]>(b2[t,p] + c2[t,p]-0.01)):
+            price_comply[t,p] = (CT_l_sol.T[t,p]==Lmax[t,p])
+            case[t,p] = 1
+        elif (CT_price2_sol[0,t]<(b2[t,p] - c2[t,p]-0.01)):
+            price_comply[t,p] = (CT_l_sol.T[t,p]==Lmin[t,p])
+            case[t,p] = 2
+        else:
+            price_comply[t,p] = (CT_l_sol.T[t,p]>=Lmin[t,p])&(CT_l_sol.T[t,p]<=Lmax[t,p])
+            case[t,p] = 3
+            
 #%% ADMM optimisation CED via master-sub classes
 from ADMM_master import ADMM_Master
 o = 0.01
@@ -215,15 +234,14 @@ for i1 in range(TMST):
 gap_opt1 = opt1-CT_obj_sol
 gap_opt12 = opt1-ooo
 
-#%% BAL - definition of parameters and utility and cost curves - almost done
-
+#%% BAL - definition of parameters and utility and cost curves
 #os.chdir(dd2)
 #import shelve
 #filename='input_data_2.out'
 
 # input data
 d = shelve.open(filename, 'r')
-el_price = d['tot_el_price'][0::2]/1000
+el_price = d['tot_el_price']#[0::2]/1000
 b2 = d['b2']        
 c2 = d['c2']      
 b1 = d['b1']
@@ -284,14 +302,13 @@ n = b2.shape[1]
 g = b1.shape[1]
 TMST = 48*4#b2.shape[0] # *4 because now we have 15 mins time intervals
 
-#%%
 # retrieving and extending (1h --> 15min) set points and DA price from DA stage
-#p_tilde = np.repeat(p_1, 4, axis=0)
-p_tilde = np.repeat(CT_p_sol.T, 4, axis=0)
-#l_tilde = np.repeat(l_1, 4, axis=0)
-l_tilde = np.repeat(CT_l_sol.T, 4, axis=0)
-#lambda_CED = np.repeat(price_community, 4, axis=0)
-lambda_CED = np.repeat(-CT_price2_sol[0,:], 4, axis=0)
+p_tilde = np.repeat(p_1, 4, axis=0)
+#p_tilde = np.repeat(CT_p_sol.T, 4, axis=0)
+l_tilde = np.repeat(l_1, 4, axis=0)
+#l_tilde = np.repeat(CT_l_sol.T, 4, axis=0)
+lambda_CED = np.repeat(price_community, 4, axis=0)
+#lambda_CED = np.repeat(-CT_price2_sol[0,:], 4, axis=0)
 
 # save old Pmax, Pmin, Lmax, Lmin, intercepts and slopes and extend them (they'll be referred to 15 mins time interval)
 Pmax_DA = Pmax
@@ -318,76 +335,127 @@ for t in range(TMST):
     
 # TRASLATING the CURVES - using directly the DA price - CHECK if the results are the same as with the other method
 y0_c_bal = np.zeros((TMST,n))
-mm_c_bal = np.zeros((TMST,n))
 y0_g_bal = np.zeros((TMST,n))
-mm_g_bal = np.zeros((TMST,n))
-#y0_c_bal2 = np.zeros((TMST,n))
-# consumers: the intercept is now the DA price, the slope of the curve changes and it's determined by the new Lmax and Lmin
+
+#CONSUMERS
 # intercept
 for t in range(TMST):
     for p in range(n):
-        if l_tilde[t,p] == Lmin_DA[t,p]:
-            y0_c_bal[t,p] = 0.01 + b2[t,p] - c2[t,p]
-        elif l_tilde[t,p] == Lmax_DA[t,p]:
-            y0_c_bal[t,p] = 0.01 + b2[t,p] + c2[t,p]
-        else:
-            y0_c_bal[t,p] = lambda_CED[t]
+        y0_c_bal[t,p] = y0_c_DA[t,p] + mm_c_DA[t,p]*l_tilde[t,p]
+# slope
+mm_c_bal = mm_c_DA
 
-#        y0_c_bal2[t,p] = y0_c_DA[t,p] + mm_c_DA[t,p]*l_tilde[t,p]
-
-
-# slope (removing the infinite values, rising from dividing by zero)
-
-
-mm_c_bal = 2*c2[:TMST,:]/(Lmax_bal-Lmin_bal)
-if sum(abs(mm_c_bal[np.isinf(mm_c_bal)]))>0:
-        y0_c_bal[np.isinf(abs(mm_c_bal))] = 0.01 + b2[np.isinf(abs(mm_c_bal))]
-        mm_c_bal[np.isinf(abs(mm_c_bal))] = 0
-        
-        
-# generators: the intercept now is the DA price, the slope of the curve does not change and it's determined by Pmax and Pmin
+# GENERATORS        
+# intercept  
 for t in range(TMST):
-# intercept
     for p in range(n):
-        if p_tilde[t,p] - PV[t,p] == Pmin_DA[p]:
-            y0_g_bal[t,p] = 0.01 + b1[t,p] - c1[t,p]
-        elif p_tilde[t,p] - PV[t,p] == Pmax_DA[p]:
-            y0_g_bal[t,p] = 0.01 + b1[t,p] + c1[t,p]
-        else:
-            y0_g_bal[t,p] = lambda_CED[t]
-# slope (removing the infinite values and the NaN values)
-mm_g_bal = 2*c1[:TMST,:]/(Pmax_bal-Pmin_bal)
-if sum(abs(mm_g_bal[np.isinf(mm_g_bal)]))>0:
-        y0_g_bal[np.isinf(abs(mm_g_bal))] = 0.01 + b1[np.isinf(abs(mm_g_bal))]
-        mm_g_bal[np.isinf(abs(mm_g_bal))] = 0
-        y0_g_bal[np.isnan(y0_g_bal)] = 0
-        mm_g_bal[np.isnan(mm_g_bal)] = 0
-        
-el_price_e = el_price
+        y0_g_bal[t,p] = y0_g_DA[t,p] + mm_g_DA[t,p]*p_tilde[t,p]  
+# slope
+mm_g_bal = mm_g_DA
 
+
+# OTHER METHOD
+## consumers: the intercept is now the DA price, the slope of the curve changes and it's determined by the new Lmax and Lmin
+## intercept
+#for t in range(TMST):
+#    for p in range(n):
+#        if l_tilde[t,p] == Lmin_DA[t,p]:
+#            y0_c_bal[t,p] = 0.01 + b2[t,p] - c2[t,p]
+#        elif l_tilde[t,p] == Lmax_DA[t,p]:
+#            y0_c_bal[t,p] = 0.01 + b2[t,p] + c2[t,p]
+#        else:
+#            y0_c_bal[t,p] = lambda_CED[t]
+
+## slope (removing the infinite values, rising from dividing by zero)
+#mm_c_bal = 2*c2[:TMST,:]/(Lmax_bal-Lmin_bal)
+#if sum(abs(mm_c_bal[np.isinf(mm_c_bal)]))>0:
+#        y0_c_bal[np.isinf(abs(mm_c_bal))] = 0.01 + b2[np.isinf(abs(mm_c_bal))]
+#        mm_c_bal[np.isinf(abs(mm_c_bal))] = 0
+
+## generators: the intercept now is the DA price, the slope of the curve does not change and it's determined by Pmax and Pmin
+#for t in range(TMST):
+## intercept
+#    for p in range(n):
+#        if p_tilde[t,p] - PV[t,p] == Pmin_DA[p]:
+#            y0_g_bal[t,p] = 0.01 + b1[t,p] - c1[t,p]
+#        elif p_tilde[t,p] - PV[t,p] == Pmax_DA[p]:
+#            y0_g_bal[t,p] = 0.01 + b1[t,p] + c1[t,p]
+#        else:
+#            y0_g_bal[t,p] = lambda_CED[t]
+#            
+## slope (removing the infinite values and the NaN values)
+#mm_g_bal = 2*c1[:TMST,:]/(Pmax_bal-Pmin_bal)
+#if sum(abs(mm_g_bal[np.isinf(mm_g_bal)]))>0:
+#        y0_g_bal[np.isinf(abs(mm_g_bal))] = 0.01 + b1[np.isinf(abs(mm_g_bal))]
+#        mm_g_bal[np.isinf(abs(mm_g_bal))] = 0
+#        y0_g_bal[np.isnan(y0_g_bal)] = 0
+#        mm_g_bal[np.isnan(mm_g_bal)] = 0
 
 ## TRASLATING the CURVES - creating them again based on new Lmin and Lmax
 ## consumers
 #y0_c_bal = 0.01 + b2[:TMST,:] + (l_tilde-(Lmax-Lmin)/2)*y0_c_DA[:TMST,:] # controlla che sia positivo
-#mm_c_bal = 2*c2[:TMST,:]/(Lmax-Lmin)
-#if sum(abs(mm_c_bal[np.isinf(mm_c_bal)]))>0:
-#    y0_c_bal[np.isinf(abs(mm_c_bal))] = 0.01 + b2[np.isinf(abs(mm_c_bal))]
-#    mm_c_bal[np.isinf(abs(mm_c_bal))] = 0
-#    
 ## generators
 #y0_g_bal = 0.01 + b1[:TMST,:] + (p_tilde-(Pmax-Pmin)/2)*(2*c2[:TMST,:]/(Pmax-Pmin)) # controlla che sia positivo
-#mm_g_bal = 2*c1[:TMST,:]/(Pmax-Pmin)
-#if sum(abs(mm_g_bal[np.isinf(mm_g_bal)]))>0:
-#    y0_g_bal[np.isinf(abs(mm_g_bal))] = 0.01 + b1[np.isinf(abs(mm_g_bal))]
-#    mm_g_bal[np.isinf(abs(mm_g_bal))] = 0
-#    y0_g_bal[np.isnan(y0_g)] = 0
-#    mm_g_bal[np.isnan(mm_g)] = 0
 
 tau = 0.1
 window = 4
 
+#%% SCENARIOS
 
-#%% Community BALANCING - CENTRALIZED solution - it should be OK
+# prices
+el_price_DA = np.repeat(el_price_e, 4, axis=0)
+average_DA_price = np.average(el_price_DA)
+ret_price_exp = 1.8*average_DA_price
+ret_price_imp = ret_price_exp + 0.01
+UP_bal_price = el_price_DA + abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
+DW_bal_price = el_price_DA - abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
+system_state = np.random.randint(3, size=len(el_price_DA)) # where 0 is balanced, 1 is UP and 2 is DW regulation.
+
+# benchmark - BRP
+# scenario 1 - fixed tariff
+imbal_cost_1 = np.zeros([TMST,n])
+for t in range(TMST):
+    for p in range(n):
+        if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
+            imbal_cost_1[t,p] = - ret_price_imp*(deltaPV[t,p]-deltaLoad[t,p])
+        else:
+            imbal_cost_1[t,p] = ret_price_exp*(deltaPV[t,p]-deltaLoad[t,p])
+imbal_cost_1 = np.sum(imbal_cost_1)
+
+# scenario 2 - dynamic tariff - 2 price system
+imbal_cost_2 = np.zeros([TMST,n])
+for t in range(TMST):
+    for p in range(n):
+        if system_state[t] == 0:
+            if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
+                imbal_cost_2[t,p] = - (el_price_DA[t] + 0.01)*(deltaPV[t,p]-deltaLoad[t,p])
+            else:
+                imbal_cost_2[t,p] = el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
+        if system_state[t] == 1:
+            if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
+                imbal_cost_2[t,p] = - UP_bal_price[t]*(deltaPV[t,p]-deltaLoad[t,p])
+            else:
+                imbal_cost_2[t,p] = el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
+        if system_state[t] == 2:
+            if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
+                imbal_cost_2[t,p] = - el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
+            else:
+                imbal_cost_2[t,p] = DW_bal_price[t]*(deltaPV[t,p]-deltaLoad[t,p])
+imbal_cost_2 = np.sum(imbal_cost_2)
+
+# SCENARIO 3 and 4 in the following sections
+el_price_bal_fixed = average_DA_price*np.ones(TMST)
+el_price_bal = np.empty([TMST])
+for t in range(TMST):
+    if system_state[t] == 0:
+        el_price_bal[t] = el_price_DA[t]
+    elif system_state[t] == 1:
+        el_price_bal[t] = UP_bal_price[t]
+    elif system_state[t] == 2:
+        el_price_bal[t] = DW_bal_price[t]
+    
+
+#%% Community BALANCING - CENTRALIZED solution - SCENARIO 3 and 4 - choose between different optios of gamma_i and gamma_e
 CT_p_sol_bal = np.zeros((g,TMST))
 CT_l_sol_bal = np.zeros((n,TMST))
 CT_q_sol_bal = np.zeros((n,TMST))
@@ -413,8 +481,10 @@ for t in np.arange(0,TMST,96):  # for t = 0, 24
     beta = np.array([CT_m.addVar() for i in range(n) for k in range(96)])
     q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(96)])
     q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(96)]) 
-    gamma_i = (el_price_e[temp] + 0.1)
-    gamma_e = -el_price_e[temp]
+    gamma_i = (el_price_bal_fixed[temp] + 0.1)
+    gamma_e = -el_price_bal_fixed[temp]
+#    gamma_i = (el_price_bal[temp] + 0.1)
+#    gamma_e = -el_price_bal[temp]
     CT_m.update()
     
     p = np.transpose(p.reshape(n,96))
@@ -440,7 +510,6 @@ for t in np.arange(0,TMST,96):  # for t = 0, 24
     # Add constraint
     for k in range(96):
         CT_m.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k)) #somma sui prosumer
-        #what about mettere una variabile invece che 0? da minimizzare poi nell'obj
         for i in range(n): #balance per ogni prosumer, ogni ora
             CT_m.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] + deltaPV[k,i] - deltaLoad[k,i] == 0, name="pros[%s,%s]"% (k,i))
             CT_m.addConstr(q[k,i] <= q_pos[k,i]) #limite sulla q, che può essere pos o neg
@@ -485,6 +554,10 @@ CT_IE_sol_bal = CT_imp_sol_bal - CT_exp_sol_bal
 #for x in range(1,10):
 #       a[x]=d["string{0}".format(x)]
 
+
+
+
+
 #%% ADMM optimisation BAL via master-sub classes - it should be OK - check the attributes
 from ADMM_master_bal import ADMM_Master_bal
 o = 0.01
@@ -525,8 +598,8 @@ ooo = np.empty(TMST)
 for i1 in range(TMST):
     opt1[i1] = (sum(y0_c[i1,:]*l_1[i1,:] + mm_c[i1,:]/2*l_1[i1,:]*l_1[i1,:]) + sum(y0_g[i1,:]*p_1[i1,:] + mm_g[i1,:]/2*p_1[i1,:]*p_1[i1,:]) #+ el_price_e[i1]*ie_1[i1]
                 + 0.001*sum(abs(q_1[i1,:])) + (el_price_e[i1]+0.1)*sum(alfa_1[i1,:]) - el_price_e[i1]*sum(beta_1[i1,:]))
-    ooo[i1] = (sum(y0_c[i1,:]*CT_l_sol[:,i1] + mm_c[i1,:]/2*CT_l_sol[:,i1]*CT_l_sol[:,i1]) + sum(y0_g_bal[i1,:]*CT_p_sol[:,i1] + mm_g[i1,:]/2*CT_p_sol[:,i1]*CT_p_sol[:,i1]) + 
-                (el_price_e[i1]+0.1)*CT_imp_sol[i1] - el_price_e[i1]*CT_exp_sol[i1] + 0.001*sum(abs(CT_q_sol[:,i1]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
+    ooo[i1] = (sum(y0_c[i1,:]*CT_l_sol_bal[:,i1] + mm_c[i1,:]/2*CT_l_sol_bal[:,i1]*CT_l_sol_bal[:,i1]) + sum(y0_g_bal[i1,:]*CT_p_sol_bal[:,i1] + mm_g[i1,:]/2*CT_p_sol_bal[:,i1]*CT_p_sol_bal[:,i1]) + 
+                (el_price_e[i1]+0.1)*CT_imp_sol_bal[i1] - el_price_e[i1]*CT_exp_sol_bal[i1] + 0.001*sum(abs(CT_q_sol_bal[:,i1]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
     
 gap_opt1 = opt1-CT_obj_sol
 gap_opt12 = opt1-ooo
