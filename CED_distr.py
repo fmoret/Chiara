@@ -12,10 +12,12 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import shelve
 
+
 dd1 = os.getcwd() #os.path.realpath(__file__) #os.getcwd()
 data_path = str(Path(dd1).parent.parent)+r'\trunk\Input Data 2'
 
 filename=data_path+r'\input_data_2.out'
+file_loc=data_path+r'\el_prices.xlsx'
 #%dd1 = 'M:/PhD/Chiara/branches/balancing'
 #%dd2 = 'M:/PhD/Chiara/trunk/Input Data 2'os.chdir(dd1)
 #dd1 = 'C:/Users/Chiara/Desktop/special_course/branches/balancing'
@@ -28,7 +30,10 @@ filename=data_path+r'\input_data_2.out'
 #filename='input_data_2.out'
 d = shelve.open(filename, 'r')
 #el_price = d['tot_el_price']#[0::2]/1000
-el_price =
+el_price_dataframe = pd.read_excel(file_loc)/1000
+el_price_notSampled = el_price_dataframe.values
+el_price_sampled = el_price_notSampled[1::2] #ogni 2 valori prende il secondo valore
+el_price = el_price_sampled[:,1]
 b2 = d['b2']        # questi sono i coefficienti dei costi/utilities - quadratic function
 c2 = d['c2']        # 2 si riferisce ai consumers, 1 ai generators
 b1 = d['b1']
@@ -242,7 +247,10 @@ gap_opt12 = opt1-ooo
 
 # input data
 d = shelve.open(filename, 'r')
-el_price = d['tot_el_price']#[0::2]/1000
+el_price_dataframe = pd.read_excel(file_loc)/1000
+el_price_notSampled = el_price_dataframe.values
+el_price_sampled = el_price_notSampled[1::2] #ogni 2 valori prende il secondo valore
+el_price = el_price_sampled[:,1]
 b2 = d['b2']        
 c2 = d['c2']      
 b1 = d['b1']
@@ -398,8 +406,39 @@ mm_g_bal = mm_g_DA
 ## generators
 #y0_g_bal = 0.01 + b1[:TMST,:] + (p_tilde-(Pmax-Pmin)/2)*(2*c2[:TMST,:]/(Pmax-Pmin)) # controlla che sia positivo
 
+
 tau = 0.1
 window = 4
+
+#%% SOME PICTURES
+
+#PV imbalance - prosumer 0
+fig_PV = plt.figure(11,figsize=[10,6])
+ax1, = plt.plot(PV[:192,0],label='PV forecast')
+ax2, = plt.plot(PV_real[:192,0],label='PV realization')
+plt.legend([ax1, ax2], ['PV forecast', 'PV realization'])
+plt.xlabel('time [15 mins intervals]')
+plt.ylabel('PV production [kWh]')
+plt.title('PV production prosumer #0')
+#load imbalance - prosumer 1
+fig_load = plt.figure(11,figsize=[10,6])
+ax1, = plt.plot(Load[:192,1],label='Load forecast')
+ax2, = plt.plot(Load_real[:192,1],label='Load realization')
+plt.legend([ax1, ax2], ['Load forecast', 'Load realization'])
+plt.xlabel('time [15 mins intervals]')
+plt.ylabel('Load comsumption [kWh]')
+plt.title('Load consumption prosumer #1')
+#load imbalance  and minmax limits - prosumer 1
+fig_load_minmax = plt.figure(11,figsize=[10,6])
+ax1, = plt.plot(-Load[:192,1],label='Load forecast',marker='o',linestyle='dashed')
+ax2, = plt.plot(-Load_real[:192,1],label='Load realization',linestyle='dashed')
+ax3, = plt.plot(Lmin_DA[:192,1],label='Lmin')
+ax4, = plt.plot(Lmax_DA[:192,1],label='Lmax')
+ax5, = plt.plot(l_tilde[:192,1],label='consumption set point',linestyle='dashed')
+plt.legend([ax1, ax2,ax3,ax4,ax5], ['Load forecast', 'Load realization','Lmin','Lmax','consumption set point'])
+plt.xlabel('time [15 mins intervals]')
+plt.ylabel('Load comsumption [kWh]')
+plt.title('Load consumption prosumer #1')
 
 #%% SCENARIOS
 
@@ -408,9 +447,19 @@ el_price_DA = np.repeat(el_price_e, 4, axis=0)
 average_DA_price = np.average(el_price_DA)
 ret_price_exp = 1.8*average_DA_price # to be discussed with Pierre
 ret_price_imp = ret_price_exp + 0.1
-el_price_UP = el_price_DA + abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
-el_price_DW = el_price_DA - abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
-system_state = np.random.randint(3, size=len(el_price_DA)) # where 0 is balanced, 1 is UP and 2 is DW regulation.
+el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0)
+el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0)
+#el_price_UP = el_price_DA + abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
+#el_price_DW = el_price_DA - abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
+system_state = np.empty([TMST])
+for t in range(TMST):
+    if el_price_DA[t] == el_price_DW[t]:
+        system_state[t] = 2
+    elif el_price_DA[t] == el_price_UP[t]:
+        system_state[t] = 1
+    elif el_price_DW[t] == el_price_UP[t]:
+        system_state = 0
+#system_state = np.random.randint(3, size=len(el_price_DA)) # where 0 is balanced, 1 is UP and 2 is DW regulation.
 
 # benchmark - BRP
 # scenario 1 - fixed tariff
@@ -446,23 +495,23 @@ imbal_cost_2 = np.sum(imbal_cost_2)
 
 # SCENARIO 3 and 4 in the following sections
 el_price_bal_fixed = average_DA_price*np.ones(TMST)
-el_price_bal_UP_4 = np.empty([TMST])
-el_price_bal_DW_4 = np.empty([TMST])
-for t in range(TMST):
-    if system_state[t] == 0:
-        el_price_bal_UP_4[t] = el_price_DA[t]
-        el_price_bal_DW_4[t] = el_price_DA[t]
-    elif system_state[t] == 1:
-        el_price_bal_UP_4[t] = el_price_DA[t]
-        el_price_bal_DW_4[t] = el_price_DW[t]
-    elif system_state[t] == 2:
-        el_price_bal_UP_4[t] = el_price_UP[t]
-        el_price_bal_DW_4[t] = el_price_DA[t]
+#el_price_bal_UP_4 = np.empty([TMST])
+#el_price_bal_DW_4 = np.empty([TMST])
+#for t in range(TMST):
+#    if system_state[t] == 0:
+#        el_price_bal_UP_4[t] = el_price_DA[t]
+#        el_price_bal_DW_4[t] = el_price_DA[t]
+#    elif system_state[t] == 1:
+#        el_price_bal_UP_4[t] = el_price_DA[t]
+#        el_price_bal_DW_4[t] = el_price_DW[t]
+#    elif system_state[t] == 2:
+#        el_price_bal_UP_4[t] = el_price_UP[t]
+#        el_price_bal_DW_4[t] = el_price_DA[t]
     
 
 #%% Community BALANCING - CENTRALIZED solution - SCENARIO 3 and 4
 # choose here:
-scenario = 3
+scenario = 4
 
 CT_p_sol_bal = np.zeros((g,TMST))
 CT_l_sol_bal = np.zeros((n,TMST))
