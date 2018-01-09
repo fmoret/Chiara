@@ -27,7 +27,8 @@ filename=data_path+r'\input_data_2.out'
 #import shelve
 #filename='input_data_2.out'
 d = shelve.open(filename, 'r')
-el_price = d['tot_el_price']#[0::2]/1000
+#el_price = d['tot_el_price']#[0::2]/1000
+el_price =
 b2 = d['b2']        # questi sono i coefficienti dei costi/utilities - quadratic function
 c2 = d['c2']        # 2 si riferisce ai consumers, 1 ai generators
 b1 = d['b1']
@@ -318,7 +319,7 @@ Lmin_DA = np.repeat(Lmin, 4, axis=0)
 y0_c_DA = np.repeat(y0_c, 4, axis=0)
 y0_g_DA = np.repeat(y0_g, 4, axis=0)
 mm_c_DA = np.repeat(mm_c, 4, axis=0)
-mm_g_DA = np.repeat(mm_c, 4, axis=0)
+mm_g_DA = np.repeat(mm_g, 4, axis=0)
 
 # new Pmax and Pmin, Lmax and Lmin (referred to 15 mins time interval)----CHECK if correct as a concept!!!
 Pmax_bal = np.zeros((TMST,n))
@@ -405,10 +406,10 @@ window = 4
 # prices
 el_price_DA = np.repeat(el_price_e, 4, axis=0)
 average_DA_price = np.average(el_price_DA)
-ret_price_exp = 1.8*average_DA_price
-ret_price_imp = ret_price_exp + 0.01
-UP_bal_price = el_price_DA + abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
-DW_bal_price = el_price_DA - abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
+ret_price_exp = 1.8*average_DA_price # to be discussed with Pierre
+ret_price_imp = ret_price_exp + 0.1
+el_price_UP = el_price_DA + abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
+el_price_DW = el_price_DA - abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
 system_state = np.random.randint(3, size=len(el_price_DA)) # where 0 is balanced, 1 is UP and 2 is DW regulation.
 
 # benchmark - BRP
@@ -433,29 +434,36 @@ for t in range(TMST):
                 imbal_cost_2[t,p] = el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
         if system_state[t] == 1:
             if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
-                imbal_cost_2[t,p] = - UP_bal_price[t]*(deltaPV[t,p]-deltaLoad[t,p])
+                imbal_cost_2[t,p] = - el_price_UP[t]*(deltaPV[t,p]-deltaLoad[t,p])
             else:
                 imbal_cost_2[t,p] = el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
         if system_state[t] == 2:
             if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
                 imbal_cost_2[t,p] = - el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
             else:
-                imbal_cost_2[t,p] = DW_bal_price[t]*(deltaPV[t,p]-deltaLoad[t,p])
+                imbal_cost_2[t,p] = el_price_DW[t]*(deltaPV[t,p]-deltaLoad[t,p])
 imbal_cost_2 = np.sum(imbal_cost_2)
 
 # SCENARIO 3 and 4 in the following sections
 el_price_bal_fixed = average_DA_price*np.ones(TMST)
-el_price_bal = np.empty([TMST])
+el_price_bal_UP_4 = np.empty([TMST])
+el_price_bal_DW_4 = np.empty([TMST])
 for t in range(TMST):
     if system_state[t] == 0:
-        el_price_bal[t] = el_price_DA[t]
+        el_price_bal_UP_4[t] = el_price_DA[t]
+        el_price_bal_DW_4[t] = el_price_DA[t]
     elif system_state[t] == 1:
-        el_price_bal[t] = UP_bal_price[t]
+        el_price_bal_UP_4[t] = el_price_DA[t]
+        el_price_bal_DW_4[t] = el_price_DW[t]
     elif system_state[t] == 2:
-        el_price_bal[t] = DW_bal_price[t]
+        el_price_bal_UP_4[t] = el_price_UP[t]
+        el_price_bal_DW_4[t] = el_price_DA[t]
     
 
-#%% Community BALANCING - CENTRALIZED solution - SCENARIO 3 and 4 - choose between different optios of gamma_i and gamma_e
+#%% Community BALANCING - CENTRALIZED solution - SCENARIO 3 and 4
+# choose here:
+scenario = 3
+
 CT_p_sol_bal = np.zeros((g,TMST))
 CT_l_sol_bal = np.zeros((n,TMST))
 CT_q_sol_bal = np.zeros((n,TMST))
@@ -481,10 +489,12 @@ for t in np.arange(0,TMST,96):  # for t = 0, 24
     beta = np.array([CT_m.addVar() for i in range(n) for k in range(96)])
     q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(96)])
     q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(96)]) 
-    gamma_i = (el_price_bal_fixed[temp] + 0.1)
-    gamma_e = -el_price_bal_fixed[temp]
-#    gamma_i = (el_price_bal[temp] + 0.1)
-#    gamma_e = -el_price_bal[temp]
+    if scenario == 3:
+        gamma_i = (el_price_bal_fixed[temp] + 0.1) 
+        gamma_e = -el_price_bal_fixed[temp]       
+    if scenario == 4:
+        gamma_i = el_price_bal_UP_4[temp]     
+        gamma_e = -el_price_bal_DW_4[temp]       
     CT_m.update()
     
     p = np.transpose(p.reshape(n,96))
@@ -554,9 +564,19 @@ CT_IE_sol_bal = CT_imp_sol_bal - CT_exp_sol_bal
 #for x in range(1,10):
 #       a[x]=d["string{0}".format(x)]
 
-
-
-
+# IMBALANCE COSTS
+if scenario == 3:
+    imbal_cost_3 = np.empty(TMST)
+    for i in range(TMST):
+        imbal_cost_3[i] = (sum(y0_c_bal[i,:]*CT_l_sol_bal[:,i] + mm_c_bal[i,:]/2*CT_l_sol_bal[:,i]*CT_l_sol_bal[:,i]) + sum(y0_g_bal[i,:]*CT_p_sol_bal[:,i] + mm_g_bal[i,:]/2*CT_p_sol_bal[:,i]*CT_p_sol_bal[:,i]) + 
+                    (el_price_bal_fixed[i]+0.1)*CT_imp_sol_bal[i] - el_price_bal_fixed[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
+    imbal_cost_3 = np.sum(imbal_cost_3)
+if scenario == 4:
+    imbal_cost_4 = np.empty(TMST)
+    for i in range(TMST):
+        imbal_cost_4[i] = (sum(y0_c_bal[i,:]*CT_l_sol_bal[:,i] + mm_c_bal[i,:]/2*CT_l_sol_bal[:,i]*CT_l_sol_bal[:,i]) + sum(y0_g_bal[i,:]*CT_p_sol_bal[:,i] + mm_g_bal[i,:]/2*CT_p_sol_bal[:,i]*CT_p_sol_bal[:,i]) + 
+                  el_price_bal_UP_4[i]*CT_imp_sol_bal[i] - el_price_bal_DW_4[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
+    imbal_cost_4 = np.sum(imbal_cost_4)
 
 #%% ADMM optimisation BAL via master-sub classes - it should be OK - check the attributes
 from ADMM_master_bal import ADMM_Master_bal
