@@ -299,6 +299,17 @@ for row in range(Load_real.shape[0]):
 # IMBALANCES
 deltaPV = PV_real - PV
 deltaLoad = Load_real - Load
+deltaPV_prosumer = np.empty([n])
+deltaLoad_prosumer = np.empty([n])
+for p in range(n):
+    deltaPV_prosumer[p] = np.sum(deltaPV[:,p])
+    deltaLoad_prosumer[p] = np.sum(deltaLoad[:,p])
+imbalance_prosumer = deltaPV_prosumer - deltaLoad_prosumer
+    
+#EXPECTED unbalance
+deltaPV_exp = deltaPV.sum()/(n*TMST)
+deltaLoad_exp = deltaLoad.sum()/(n*TMST)
+
 
 # aggregated load before and after imbalance            
 Agg_load = Load + Flex_load
@@ -444,22 +455,32 @@ plt.title('Load consumption prosumer #1')
 
 # prices
 el_price_DA = np.repeat(el_price_e, 4, axis=0)
-average_DA_price = np.average(el_price_DA)
-ret_price_exp = 1.8*average_DA_price # to be discussed with Pierre
-ret_price_imp = ret_price_exp + 0.1
-el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0)
-el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0)
+el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0) # 2 rows
+el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0) # 2 rows
 #el_price_UP = el_price_DA + abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
 #el_price_DW = el_price_DA - abs(np.random.normal(0,0.5*average_DA_price,(el_price_DA.shape)))
+
 system_state = np.empty([TMST])
 for t in range(TMST):
     if el_price_DA[t] == el_price_DW[t]:
-        system_state[t] = 2
-    elif el_price_DA[t] == el_price_UP[t]:
         system_state[t] = 1
+    elif el_price_DA[t] == el_price_UP[t]:
+        system_state[t] = 2
     elif el_price_DW[t] == el_price_UP[t]:
         system_state = 0
 #system_state = np.random.randint(3, size=len(el_price_DA)) # where 0 is balanced, 1 is UP and 2 is DW regulation.
+
+el_price_BAL = np.empty([TMST]) # 1 row 
+for t in range(TMST):
+    if system_state[t] == 0:                # where 0 is balanced, 1 is UP and 2 is DW regulation
+        el_price_BAL[t] = el_price_UP[t]
+    elif system_state[t] == 1:
+        el_price_BAL[t] = el_price_UP[t]
+    elif system_state[t] == 2:
+        el_price_BAL[t] = el_price_DW[t]
+        
+ret_price_exp = np.average(el_price_BAL) # to be discussed with Pierre    
+ret_price_imp = ret_price_exp + 0.1
 
 # benchmark - BRP
 # scenario 1 - fixed tariff
@@ -469,7 +490,7 @@ for t in range(TMST):
         if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
             imbal_cost_1[t,p] = - ret_price_imp*(deltaPV[t,p]-deltaLoad[t,p])
         else:
-            imbal_cost_1[t,p] = ret_price_exp*(deltaPV[t,p]-deltaLoad[t,p])
+            imbal_cost_1[t,p] = -ret_price_exp*(deltaPV[t,p]-deltaLoad[t,p])
 imbal_cost_1 = np.sum(imbal_cost_1)
 
 # scenario 2 - dynamic tariff - 2 price system
@@ -478,23 +499,23 @@ for t in range(TMST):
     for p in range(n):
         if system_state[t] == 0:
             if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
-                imbal_cost_2[t,p] = - (el_price_DA[t] + 0.01)*(deltaPV[t,p]-deltaLoad[t,p])
+                imbal_cost_2[t,p] = - el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
             else:
-                imbal_cost_2[t,p] = el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
+                imbal_cost_2[t,p] = -el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
         if system_state[t] == 1:
             if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
                 imbal_cost_2[t,p] = - el_price_UP[t]*(deltaPV[t,p]-deltaLoad[t,p])
             else:
-                imbal_cost_2[t,p] = el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
+                imbal_cost_2[t,p] = -el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
         if system_state[t] == 2:
             if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
                 imbal_cost_2[t,p] = - el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
             else:
-                imbal_cost_2[t,p] = el_price_DW[t]*(deltaPV[t,p]-deltaLoad[t,p])
+                imbal_cost_2[t,p] = -el_price_DW[t]*(deltaPV[t,p]-deltaLoad[t,p])
 imbal_cost_2 = np.sum(imbal_cost_2)
 
 # SCENARIO 3 and 4 in the following sections
-el_price_bal_fixed = average_DA_price*np.ones(TMST)
+el_price_BAL_fixed = np.average(el_price_BAL)*np.ones(TMST)
 #el_price_bal_UP_4 = np.empty([TMST])
 #el_price_bal_DW_4 = np.empty([TMST])
 #for t in range(TMST):
@@ -539,11 +560,11 @@ for t in np.arange(0,TMST,96):  # for t = 0, 24
     q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(96)])
     q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(96)]) 
     if scenario == 3:
-        gamma_i = (el_price_bal_fixed[temp] + 0.1) 
-        gamma_e = -el_price_bal_fixed[temp]       
+        gamma_i = (el_price_BAL_fixed[temp] + 0.1) 
+        gamma_e = -el_price_BAL_fixed[temp]     
     if scenario == 4:
-        gamma_i = el_price_bal_UP_4[temp]     
-        gamma_e = -el_price_bal_DW_4[temp]       
+        gamma_i = el_price_UP[temp]     
+        gamma_e = -el_price_DW[temp]       
     CT_m.update()
     
     p = np.transpose(p.reshape(n,96))
@@ -615,17 +636,64 @@ CT_IE_sol_bal = CT_imp_sol_bal - CT_exp_sol_bal
 
 # IMBALANCE COSTS
 if scenario == 3:
-    imbal_cost_3 = np.empty(TMST)
+    imbal_cost_3 = np.empty([TMST])
     for i in range(TMST):
         imbal_cost_3[i] = (sum(y0_c_bal[i,:]*CT_l_sol_bal[:,i] + mm_c_bal[i,:]/2*CT_l_sol_bal[:,i]*CT_l_sol_bal[:,i]) + sum(y0_g_bal[i,:]*CT_p_sol_bal[:,i] + mm_g_bal[i,:]/2*CT_p_sol_bal[:,i]*CT_p_sol_bal[:,i]) + 
-                    (el_price_bal_fixed[i]+0.1)*CT_imp_sol_bal[i] - el_price_bal_fixed[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
-    imbal_cost_3 = np.sum(imbal_cost_3)
+                    (el_price_BAL_fixed[i]+0.1)*CT_imp_sol_bal[i] - el_price_BAL_fixed[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
+    imbal_cost_3_tot = np.sum(imbal_cost_3)
 if scenario == 4:
-    imbal_cost_4 = np.empty(TMST)
+    imbal_cost_4 = np.empty([TMST])
     for i in range(TMST):
         imbal_cost_4[i] = (sum(y0_c_bal[i,:]*CT_l_sol_bal[:,i] + mm_c_bal[i,:]/2*CT_l_sol_bal[:,i]*CT_l_sol_bal[:,i]) + sum(y0_g_bal[i,:]*CT_p_sol_bal[:,i] + mm_g_bal[i,:]/2*CT_p_sol_bal[:,i]*CT_p_sol_bal[:,i]) + 
-                  el_price_bal_UP_4[i]*CT_imp_sol_bal[i] - el_price_bal_DW_4[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
-    imbal_cost_4 = np.sum(imbal_cost_4)
+                  el_price_UP[i]*CT_imp_sol_bal[i] - el_price_DW[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
+    imbal_cost_4_tot = np.sum(imbal_cost_4)
+
+# prosumers COSTS and REVENUES - revenues positive and cost negative
+if scenario == 3:
+    revcost_3 = np.empty([TMST,n])
+    for t in range(TMST):
+        for p in range(n):
+            revcost_3[t,p] =-0.001*abs(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] - CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1) - \
+                            y0_c_bal[t,p]*CT_l_sol_bal[p,t] - mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] - y0_g_bal[t,p]*CT_p_sol_bal[p,t] - mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+            #revcost_3[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] - CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1)
+            #revcost_3[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] - CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1) + \
+            #                y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+    revcost_3_prosumer = np.empty([n])
+    for p in range(n):
+        revcost_3_prosumer[p] = np.sum(revcost_3[:,p])
+    revcost_3_tot = np.sum(revcost_3_prosumer)
+if scenario == 4:
+    revcost_4 = np.empty([TMST,n])
+    for t in range(TMST):
+        for p in range(n):
+            if system_state[t] == 2:
+                revcost_4[t,p] = -0.001*abs(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_DW[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t] - \
+                y0_c_bal[t,p]*CT_l_sol_bal[p,t] - mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] - y0_g_bal[t,p]*CT_p_sol_bal[p,t] - mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+
+                #revcost_4[t,p] = CT_q_sol_bal[p,t] + CT_beta_sol_bal[p,t]*el_price_DW[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
+                #y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+                
+                #revcost_4[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_DW[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t]
+            elif system_state[t] == 1:
+                revcost_4[t,p] = -0.001*abs(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_UP[t] - \
+                y0_c_bal[t,p]*CT_l_sol_bal[p,t] - mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] - y0_g_bal[t,p]*CT_p_sol_bal[p,t] - mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+
+                #revcost_4[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_UP[t] + \
+                #y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+                
+                #revcost_4[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_UP[t]
+            else:
+                revcost_4[t,p] = -0.001*abs(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t] - \
+                y0_c_bal[t,p]*CT_l_sol_bal[p,t] - mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] - y0_g_bal[t,p]*CT_p_sol_bal[p,t] - mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+
+                #revcost_4[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
+                #y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+                
+                #revcost_4[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t]
+    revcost_4_prosumer = np.empty([n])
+    for p in range(n):
+        revcost_4_prosumer[p] = np.sum(revcost_4[:,p])
+    revcost_4_tot = np.sum(revcost_4_prosumer)
 
 #%% ADMM optimisation BAL via master-sub classes - it should be OK - check the attributes
 from ADMM_master_bal import ADMM_Master_bal
