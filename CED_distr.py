@@ -621,6 +621,8 @@ for t in range(TMST):
             imbal_cost_1[t,p] = - ret_price_imp*(deltaPV[t,p]-deltaLoad[t,p])
         else:
             imbal_cost_1[t,p] = -ret_price_exp*(deltaPV[t,p]-deltaLoad[t,p])
+imbal_cost_p_1 = np.sum(imbal_cost_1, axis = 0)
+imbal_cost_p_perunit_imbal_1 = -abs(imbal_cost_p_1)/imbalance_prosumer
 imbal_cost_1 = np.sum(imbal_cost_1)
 
 # scenario 2 - dynamic tariff - 2 price system
@@ -639,6 +641,8 @@ for t in range(TMST):
                 imbal_cost_2[t,p] = - el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
             else:
                 imbal_cost_2[t,p] = -el_price_DW[t]*(deltaPV[t,p]-deltaLoad[t,p])
+imbal_cost_p_2 = np.sum(imbal_cost_2, axis = 0)
+imbal_cost_p_perunit_imbal_2 = -abs(imbal_cost_p_2)/imbalance_prosumer
 imbal_cost_2 = np.sum(imbal_cost_2)
 
 
@@ -650,6 +654,11 @@ for t in range(TMST):
     else:
         imbal_cost_3[t] = - el_price_BAL_fixed[t]*(imbalance_community[t])
 imbal_cost_3 = np.sum(imbal_cost_3)
+imbal_weights = abs(imbalance_prosumer)/(abs(imbalance_prosumer).sum())
+imbal_cost_p_3 = np.empty(n)
+for p in range(n):
+    imbal_cost_p_3[p] = imbal_weights[p]*imbal_cost_3
+imbal_cost_p_perunit_imbal_3 = imbal_cost_p_3/abs(imbalance_prosumer)
 
 imbal_cost_4 = np.zeros([TMST])
 for t in range(TMST):
@@ -666,24 +675,16 @@ for t in range(TMST):
         else:
             imbal_cost_4[t] = - el_price_DW[t]*imbalance_community[t]
 imbal_cost_4 = np.sum(imbal_cost_4)
+imbal_weights = abs(imbalance_prosumer)/(abs(imbalance_prosumer).sum())
+imbal_cost_p_4 = np.empty(n)
+for p in range(n):
+    imbal_cost_p_4[p] = imbal_weights[p]*imbal_cost_4
+imbal_cost_p_perunit_imbal_4 = imbal_cost_p_4/abs(imbalance_prosumer)
 
-# SCENARIO 3 and 4 in the following sections
-#el_price_bal_UP_4 = np.empty([TMST])
-#el_price_bal_DW_4 = np.empty([TMST])
-#for t in range(TMST):
-#    if system_state[t] == 0:
-#        el_price_bal_UP_4[t] = el_price_DA[t]
-#        el_price_bal_DW_4[t] = el_price_DA[t]
-#    elif system_state[t] == 1:
-#        el_price_bal_UP_4[t] = el_price_DA[t]
-#        el_price_bal_DW_4[t] = el_price_DW[t]
-#    elif system_state[t] == 2:
-#        el_price_bal_UP_4[t] = el_price_UP[t]
-#        el_price_bal_DW_4[t] = el_price_DA[t]
 
-#%% Community BALANCING - CENTRALIZED solution - SCENARIO 3 and 4
+#%% Community BALANCING - CENTRALIZED solution - SCENARIO 5 and 6
 # choose here:
-scenario = 6
+scenario = 5
 
 CT_p_sol_bal = np.zeros((g,TMST))
 CT_l_sol_bal = np.zeros((n,TMST))
@@ -728,14 +729,6 @@ for t in np.arange(0,TMST,96):  # for t = 0, 24
     # Set objective: 
     obj = (sum(sum(y0_c_bal[temp,:]*l + mm_c_bal[temp,:]/2*l*l) + sum(y0_g_bal[temp,:]*p + mm_g_bal[temp,:]/2*p*p)) 
            + sum(gamma_i*q_imp + gamma_e*q_exp) + sum(0.001*sum(q_pos)))
-    # doppia sommatoria: 
-    # la somma interna è sulle colonne, quindi da 15x24 si passa a 24
-    # quindi somma sui prosumer
-    # la somma esterna somma tutti gli elementi dell'array
-    # quindi somma sulle 24 ore --> un giorno
-    # discorso simile per le altre sommatorie
-    # l'objective è minimizzare il totale di un giorno
-
     CT_m.setObjective(obj)
     
     # Add constraint
@@ -787,64 +780,105 @@ CT_IE_sol_bal = CT_imp_sol_bal - CT_exp_sol_bal
 
 # IMBALANCE COSTS
 if scenario == 5:
+    #total costs
     imbal_cost_5 = np.empty([TMST])
     for i in range(TMST):
         imbal_cost_5[i] = (sum(y0_c_bal[i,:]*CT_l_sol_bal[:,i] + mm_c_bal[i,:]/2*CT_l_sol_bal[:,i]*CT_l_sol_bal[:,i]) + sum(y0_g_bal[i,:]*CT_p_sol_bal[:,i] + mm_g_bal[i,:]/2*CT_p_sol_bal[:,i]*CT_p_sol_bal[:,i]) + 
-                    (el_price_BAL_fixed[i]+0.1)*CT_imp_sol_bal[i] - el_price_BAL_fixed[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
+                    (el_price_BAL_fixed[i]+0.1)*CT_imp_sol_bal[i] - el_price_BAL_fixed[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i])))
     imbal_cost_5 = np.sum(imbal_cost_5)
+    #cost each prosumer each time interval
+    costrev_5 = np.empty([TMST,n])
+    numerator_5 = np.empty([TMST,n])
+    denominator_5 = np.empty([TMST,n])
+    for t in range(TMST):
+        for p in range(n):
+            costrev_5[t,p] =0.001*abs(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] + CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1) + \
+                            y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+            numerator_5[p,t] = -0.001*abs(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] - CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1)
+            denominator_5[p,t] = CT_l_sol_bal[p,t] + CT_p_sol_bal[p,t]
+    perceived_price_5 = np.sum(numerator_5, axis = 0)/np.sum(denominator_5, axis = 0)
+    sigma_5 = np.std(perceived_price_5)
+    sigmaMax_5 = 0.1
+    QoE_5 = 1 - sigma_5/sigmaMax_5
+    imbal_cost_p_5 = np.sum(costrev_5, axis=0)
+    costrev_5_tot = np.sum(imbal_cost_p_5) # just to check that this is equal to imbal_cost_5
+    imbal_cost_p_perunit_imbal_5 = -abs(imbal_cost_p_5)/imbalance_prosumer
+
 if scenario == 6:
+    #total costs
     imbal_cost_6 = np.empty([TMST])
     for i in range(TMST):
         imbal_cost_6[i] = (sum(y0_c_bal[i,:]*CT_l_sol_bal[:,i] + mm_c_bal[i,:]/2*CT_l_sol_bal[:,i]*CT_l_sol_bal[:,i]) + sum(y0_g_bal[i,:]*CT_p_sol_bal[:,i] + mm_g_bal[i,:]/2*CT_p_sol_bal[:,i]*CT_p_sol_bal[:,i]) + 
                   el_price_UP[i]*CT_imp_sol_bal[i] - el_price_DW[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
     imbal_cost_6 = np.sum(imbal_cost_6)
-
-# prosumers COSTS and REVENUES - revenues positive and cost negative
-if scenario == 5:
-    revcost_5 = np.empty([TMST,n])
-    for t in range(TMST):
-        for p in range(n):
-            revcost_5[t,p] =-0.001*abs(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] - CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1) - \
-                            y0_c_bal[t,p]*CT_l_sol_bal[p,t] - mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] - y0_g_bal[t,p]*CT_p_sol_bal[p,t] - mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-            #revcost_3[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] - CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1)
-            #revcost_3[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] - CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1) + \
-            #                y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-    revcost_5_prosumer = np.empty([n])
-    for p in range(n):
-        revcost_5_prosumer[p] = np.sum(revcost_5[:,p])
-    revcost_5_tot = np.sum(revcost_5_prosumer)
-if scenario == 6:
-    revcost_6 = np.empty([TMST,n])
+    #cost each prosumer each time interval
+    costrev_6 = np.empty([TMST,n])
     for t in range(TMST):
         for p in range(n):
             if system_state[t] == 2:
-                revcost_6[t,p] = -0.001*abs(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_DW[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t] - \
-                y0_c_bal[t,p]*CT_l_sol_bal[p,t] - mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] - y0_g_bal[t,p]*CT_p_sol_bal[p,t] - mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-
-                #revcost_4[t,p] = CT_q_sol_bal[p,t] + CT_beta_sol_bal[p,t]*el_price_DW[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
-                #y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-                
-                #revcost_4[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_DW[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t]
+                costrev_6[t,p] = 0.001*abs(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DW[t] + CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
+                y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
             elif system_state[t] == 1:
-                revcost_6[t,p] = -0.001*abs(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_UP[t] - \
-                y0_c_bal[t,p]*CT_l_sol_bal[p,t] - mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] - y0_g_bal[t,p]*CT_p_sol_bal[p,t] - mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-
-                #revcost_4[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_UP[t] + \
-                #y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-                
-                #revcost_4[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_UP[t]
+                costrev_6[t,p] = 0.001*abs(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DA[t] + CT_alfa_sol_bal[p,t]*el_price_UP[t] + \
+                y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
             else:
-                revcost_6[t,p] = -0.001*abs(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t] - \
-                y0_c_bal[t,p]*CT_l_sol_bal[p,t] - mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] - y0_g_bal[t,p]*CT_p_sol_bal[p,t] - mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+                costrev_6[t,p] = 0.001*abs(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DA[t] + CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
+                y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+    imbal_cost_p_6= np.sum(costrev_6, axis=0)
+    costrev_6_tot = np.sum(imbal_cost_p_6) # just to check that this is equal to imbal_cost_6
+    imbal_cost_p_perunit_imbal_6 = -abs(imbal_cost_p_6)/imbalance_prosumer
+    
 
-                #revcost_4[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
-                #y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-                
-                #revcost_4[t,p] = CT_q_sol_bal[p,t]*CT_price2_sol_bal[0,t] + CT_beta_sol_bal[p,t]*el_price_DA[t] - CT_alfa_sol_bal[p,t]*el_price_DA[t]
-    revcost_6_prosumer = np.empty([n])
-    for p in range(n):
-        revcost_6_prosumer[p] = np.sum(revcost_6[:,p])
-    revcost_6_tot = np.sum(revcost_6_prosumer)
+#%% pics
+# prosumers' costs per unit of imbalance accross scenarios
+fig_perunit_cost = plt.figure(1,figsize=[10,6])
+ax1, = plt.plot(imbal_cost_p_perunit_imbal_1,label='scenario 1F')
+ax2, = plt.plot(imbal_cost_p_perunit_imbal_2,label='scenario 1D')
+ax3, = plt.plot(imbal_cost_p_perunit_imbal_3,label='scenario 2F')
+ax4, = plt.plot(imbal_cost_p_perunit_imbal_4,label='scenario 2D')
+ax5, = plt.plot(imbal_cost_p_perunit_imbal_5,label='scenario 3F',linestyle='dashed')
+ax6, = plt.plot(imbal_cost_p_perunit_imbal_6,label='scenario 3D',linestyle='dashed')
+plt.legend([ax1, ax2, ax3, ax4, ax5, ax6], ['scenario 1F', 'scenario 1D','scenario 2F', 'scenario 2D','scenario 3F', 'scenario 3D'])
+plt.xlabel('time [15 mins intervals]')
+plt.ylabel('cost per unit of imbalance [AUD/kWh]')
+plt.title('prosumers\' costs per unit of imbalance accross scenarios')
+plt.savefig('figures/perunit_cost_scenarios.png', bbox_inches='tight')
+# production costs prosumers
+fig_perunit_cost = plt.figure(2,figsize=[10,6])
+ax1, = plt.plot(y0_g_bal[:192,7],label='prosumer 7, intercept')
+ax2, = plt.plot(y0_g_bal[:192,6],label='prosumer 6, intercept',linestyle='dashed')
+ax3, = plt.plot(mm_g_bal[:192,7],label='prosumer 7, ang. coefficient')
+ax4, = plt.plot(mm_g_bal[:192,6],label='prosumer 6, ang. coefficient',linestyle='dashed')
+plt.legend([ax1, ax2, ax3, ax4], ['prosumer 7, intercept', 'prosumer 6, intercept','prosumer 7, ang. coefficient', 'prosumer 6, ang. coefficient'])
+plt.xlabel('time [15 mins intervals]')
+plt.ylabel('production cost [AUD/kWh]')
+plt.title('production costs prosumers #6 and #7')
+plt.savefig('figures/cost6n7.png', bbox_inches='tight')
+# consumption utility prosumers
+fig_perunit_cost = plt.figure(3,figsize=[10,6])
+ax1, = plt.plot(y0_c_bal[:192,7],label='prosumer 7, intercept')
+ax2, = plt.plot(y0_c_bal[:192,6],label='prosumer 6, intercept',linestyle='dashed')
+ax3, = plt.plot(mm_c_bal[:192,7],label='prosumer 7, ang. coefficient')
+ax4, = plt.plot(mm_c_bal[:192,6],label='prosumer 6, ang. coefficient',linestyle='dashed')
+plt.legend([ax1, ax2, ax3, ax4], ['prosumer 7, intercept', 'prosumer 6, intercept','prosumer 7, ang. coefficient', 'prosumer 6, ang. coefficient'])
+plt.xlabel('time [15 mins intervals]')
+plt.ylabel('consumption utility [AUD/kWh]')
+plt.title('consumption utility prosumers #6 and #7')
+plt.savefig('figures/utility6n7.png', bbox_inches='tight')
+# total costs accross scenarios
+imbal_cost_135 = np.array((imbal_cost_1,imbal_cost_3,imbal_cost_5))
+imbal_cost_246 = np.array((imbal_cost_2,imbal_cost_4,imbal_cost_6))
+xlab = ['Scenario 1','Scenario 2','Scenario 3']
+fig = plt.figure(4,figsize=[10,6])
+ax = fig.add_subplot(111)
+res = pd.DataFrame([imbal_cost_135, imbal_cost_246],index=['Fixed tariff', 'Dynamic tariff'],columns=xlab).transpose()
+df_plot = pd.DataFrame([imbal_cost_135, imbal_cost_246],index=['Fixed tariff', 'Dynamic tariff'],columns=xlab).transpose()
+df_plot.plot(kind='bar',ax=ax)
+plt.xticks(rotation=360)
+plt.ylabel('Total imbalance costs [AUD/kWh]')
+plt.tight_layout()
+plt.grid()
+plt.savefig('figures/total_imbal_barchart.png', bbox_inches='tight')
 
 #%% ADMM optimisation BAL via master-sub classes - it should be OK - check the attributes
 from ADMM_master_bal import ADMM_Master_bal
