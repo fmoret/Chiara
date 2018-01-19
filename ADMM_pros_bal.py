@@ -29,8 +29,8 @@ class ADMM_Pros_bal:
         self.p_tilde = self.MP.data.p_tilde[idx]   
         self.l_tilde = self.MP.data.l_tilde[idx] 
 #        self.PV = self.MP.data.PV[:,idx] # forse questo non serve proprio
-        self.deltaPV = self.data.deltaPV
-        self.deltaLoad = self.data.deltaLoad
+        self.deltaPV = self.MP.data.deltaPV
+        self.deltaLoad = self.MP.data.deltaLoad
 #        self.goal = self.MP.data.goal[:,idx] 
         y0_c_DA = self.MP.data.y0_c_DA[:,idx]
         y0_g_DA = self.MP.data.y0_g_DA[:,idx]
