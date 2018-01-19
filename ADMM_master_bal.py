@@ -86,8 +86,8 @@ class ADMM_Master_bal:
 
     def _build_variables(self):
         m = self.model
-        self.variables.q_imp = np.array([m.addVar() for k in range(24)])
-        self.variables.q_exp = np.array([m.addVar() for k in range(24)])
+        self.variables.q_imp = np.array([m.addVar() for k in range(96)])
+        self.variables.q_exp = np.array([m.addVar() for k in range(96)])
         m.update()
 
     def _build_objective(self, t):
@@ -130,11 +130,11 @@ class ADMM_Master_bal:
         resul2 = []
         fl = []
 
-        for t in np.arange(0,self.params.time,24): #8,self.params.time
-            self.temp = range(t,t+24) 
+        for t in np.arange(0,self.params.time,96): #8,self.params.time
+            self.temp = range(t,t+96) 
             self.variables.iter = 0
-            self.variables.r_k = np.ones(3*24)#+self.params.num_pros)
-            real_rk = np.ones(3*24)
+            self.variables.r_k = np.ones(3*96)#+self.params.num_pros)
+            real_rk = np.ones(3*96)
             self.variables.s_k = 1.0
             self.data.sigma = self.data.rho
             res = []
@@ -169,14 +169,14 @@ class ADMM_Master_bal:
                 self.model.optimize()
                 imp_old = self.variables.pow_imp[self.temp]
                 exp_old = self.variables.pow_exp[self.temp]
-                for k in range(24):
+                for k in range(96):
                     self.variables.pow_imp[t+k] = self.variables.q_imp[k].x
                     self.variables.pow_exp[t+k] = self.variables.q_exp[k].x
 
                 #Calculate residulas
-                self.variables.r_k[range(0,24)] = self.weight*self.variables.q_k[self.temp,:].sum(axis=1)
-                self.variables.r_k[range(24,48)] = (self.variables.alfa_k[self.temp,:].sum(axis=1) - self.variables.pow_imp[self.temp])
-                self.variables.r_k[range(48,72)] = self.variables.beta_k[self.temp,:].sum(axis=1) - self.variables.pow_exp[self.temp]
+                self.variables.r_k[range(0,96)] = self.weight*self.variables.q_k[self.temp,:].sum(axis=1)
+                self.variables.r_k[range(96,192)] = (self.variables.alfa_k[self.temp,:].sum(axis=1) - self.variables.pow_imp[self.temp])
+                self.variables.r_k[range(192,288)] = self.variables.beta_k[self.temp,:].sum(axis=1) - self.variables.pow_exp[self.temp]
 
                 if max(abs(np.linalg.norm(self.variables.r_k)*np.ones(100)-stack))<0.01*np.linalg.norm(self.variables.r_k) and self.data.sigma<1:
                     self.data.sigma = self.data.sigma*2
@@ -192,12 +192,12 @@ class ADMM_Master_bal:
                 self.variables.s_k = sqrt(self.params.num_pros)*self.data.sigma*sqrt(sum(Dimp*Dimp + Dexp*Dexp))
 
                 real_rk = np.copy(self.variables.r_k)
-                real_rk[range(0,24)] = real_rk[range(0,24)]/self.weight
+                real_rk[range(0,96)] = real_rk[range(0,96)]/self.weight
                 
                 #Update price
-                self.variables.price_comm[self.temp] = self.variables.price_comm[self.temp] + self.data.sigma*self.variables.r_k[range(0,24)]
-                self.variables.price_IE[self.temp,0] = self.variables.price_IE[self.temp,0] + self.data.sigma*self.variables.r_k[range(24,48)]
-                self.variables.price_IE[self.temp,1] = self.variables.price_IE[self.temp,1] + self.data.sigma*self.variables.r_k[range(48,72)]
+                self.variables.price_comm[self.temp] = self.variables.price_comm[self.temp] + self.data.sigma*self.variables.r_k[range(0,96)]
+                self.variables.price_IE[self.temp,0] = self.variables.price_IE[self.temp,0] + self.data.sigma*self.variables.r_k[range(96,192)]
+                self.variables.price_IE[self.temp,1] = self.variables.price_IE[self.temp,1] + self.data.sigma*self.variables.r_k[range(192,288)]
 
                 print(t, '-',self.variables.iter,'     Primal Residual ', np.linalg.norm(real_rk), '     Dual Residual ', self.variables.s_k, '     Sigma ', self.data.sigma)
 
@@ -206,14 +206,14 @@ class ADMM_Master_bal:
                 if self.variables.iter==5000:
                     flag = 1
                 
-                for k in range(24):
+                for k in range(96):
                     d = {'imp': self.variables.pow_imp[t+k],
                      'exp': self.variables.pow_exp[t+k],
                      's_k': self.variables.s_k,
                      'r_k': np.linalg.norm(self.variables.r_k),
                      'r_k[0]': real_rk[k],
-                     'r_k[1]': real_rk[24+k],
-                     'r_k[2]': real_rk[48+k]
+                     'r_k[1]': real_rk[96+k],
+                     'r_k[2]': real_rk[192+k]
                      }
                     aa = {'alfa[%s]'%(i): self.variables.alfa_k[t+k,i] for i in range(self.params.num_pros)}
                     cc = {'load[%s]'%(i): self.variables.l_k[t+k,i] for i in range(self.params.num_pros)}

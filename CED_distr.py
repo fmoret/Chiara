@@ -926,11 +926,9 @@ o = 0.01
 e = 0.00001
 asynch = -100
 weight = 1/n
+TMST = 48*4
 
-# redifining names (so I dont have to change all the names in the function)
 scenario = 5
-PV_admm = np.zeros([8760*4,15])
-# Load and Flex_load? and ,PV? do we want the final result or the variation needed? ask Fabio
 if scenario == 5:
     el_price_exp = el_price_BAL_fixed
     el_price_imp = el_price_exp + 0.1
