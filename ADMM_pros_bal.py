@@ -22,15 +22,15 @@ class ADMM_Pros_bal:
         
         self.MP = MP
         self.params.idx = idx
-        self.Pmin = self.MP.data.Pmin[idx]   
-        self.Pmax = self.MP.data.Pmax[idx] 
-        self.Lmin = self.MP.data.Lmin[idx]   
-        self.Lmax = self.MP.data.Lmax[idx] 
-        self.p_tilde = self.MP.data.p_tilde[idx]   
-        self.l_tilde = self.MP.data.l_tilde[idx] 
+        self.Pmin = self.MP.data.Pmin[:,idx]   
+        self.Pmax = self.MP.data.Pmax[:,idx] 
+        self.Lmin = self.MP.data.Lmin[:,idx]   
+        self.Lmax = self.MP.data.Lmax[:,idx] 
+        self.p_tilde = self.MP.data.p_tilde[:,idx]   
+        self.l_tilde = self.MP.data.l_tilde[:,idx] 
 #        self.PV = self.MP.data.PV[:,idx] # forse questo non serve proprio
-        self.deltaPV = self.MP.data.deltaPV
-        self.deltaLoad = self.MP.data.deltaLoad
+        self.deltaPV = self.MP.data.deltaPV[:,idx] 
+        self.deltaLoad = self.MP.data.deltaLoad[:,idx] 
 #        self.goal = self.MP.data.goal[:,idx] 
         y0_c_DA = self.MP.data.y0_c_DA[:,idx]
         y0_g_DA = self.MP.data.y0_g_DA[:,idx]
