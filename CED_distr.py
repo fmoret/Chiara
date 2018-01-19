@@ -209,47 +209,47 @@ cost_DA_p = np.sum(cost_DA_tp_rep, axis=0)
 cost_DA = np.sum(cost_DA_p)
 
 #%% ADMM optimisation CED via master-sub classes
-from ADMM_master import ADMM_Master
-o = 0.01
-e = 0.00001
-asynch = -100
-weight = 1/n
-
-#% Cost of Import/Export not considered ==> case = 0
-Mast = ADMM_Master(b1, c1, Pmin, Pmax, PV, b2, c2, Load, Flex_load, tau, el_price_e, o, e, TMST, window, 0, asynch)
-ADMM_summary = Mast.results
-ADMM_prices = Mast.prices
-ADMM_flag = Mast.flag
-
-
-#%%
-max_l = abs(Mast.variables.l_k - np.transpose(CT_l_sol)).max()
-max_p = abs(Mast.variables.p_k - np.transpose(CT_p_sol)).max()
-max_q = abs(Mast.variables.q_k - np.transpose(CT_q_sol)).max()
-max_alfa = abs(Mast.variables.alfa_k - np.transpose(CT_alfa_sol)).max()
-max_beta = abs(Mast.variables.beta_k - np.transpose(CT_beta_sol)).max()
-l_1 = Mast.variables.l_k 
-p_1 = Mast.variables.p_k
-q_1 = Mast.variables.q_k
-q_pos_1 = Mast.variables.q_pos_k
-alfa_1 = Mast.variables.alfa_k 
-beta_1 = Mast.variables.beta_k 
-imp_1 = alfa_1.sum(axis=1) 
-exp_1 = beta_1.sum(axis=1)
-ie_1 = imp_1-exp_1
-price_community = Mast.variables.price_comm
-
-
-opt1 = np.empty(TMST)
-ooo = np.empty(TMST)
-for i1 in range(TMST):
-    opt1[i1] = (sum(y0_c[i1,:]*l_1[i1,:] + mm_c[i1,:]/2*l_1[i1,:]*l_1[i1,:]) + sum(y0_g[i1,:]*p_1[i1,:] + mm_g[i1,:]/2*p_1[i1,:]*p_1[i1,:]) #+ el_price_e[i1]*ie_1[i1]
-                + 0.001*sum(abs(q_1[i1,:])) + (el_price_e[i1]+0.1)*sum(alfa_1[i1,:]) - el_price_e[i1]*sum(beta_1[i1,:]))
-    ooo[i1] = (sum(y0_c[i1,:]*CT_l_sol[:,i1] + mm_c[i1,:]/2*CT_l_sol[:,i1]*CT_l_sol[:,i1]) + sum(y0_g[i1,:]*CT_p_sol[:,i1] + mm_g[i1,:]/2*CT_p_sol[:,i1]*CT_p_sol[:,i1]) + 
-                (el_price_e[i1]+0.1)*CT_imp_sol[i1] - el_price_e[i1]*CT_exp_sol[i1] + 0.001*sum(abs(CT_q_sol[:,i1]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
-    
-gap_opt1 = opt1-CT_obj_sol
-gap_opt12 = opt1-ooo
+#from ADMM_master import ADMM_Master
+#o = 0.01
+#e = 0.00001
+#asynch = -100
+#weight = 1/n
+#
+##% Cost of Import/Export not considered ==> case = 0
+#Mast = ADMM_Master(b1, c1, Pmin, Pmax, PV, b2, c2, Load, Flex_load, tau, el_price_e, o, e, TMST, window, 0, asynch)
+#ADMM_summary = Mast.results
+#ADMM_prices = Mast.prices
+#ADMM_flag = Mast.flag
+#
+#
+##%%
+#max_l = abs(Mast.variables.l_k - np.transpose(CT_l_sol)).max()
+#max_p = abs(Mast.variables.p_k - np.transpose(CT_p_sol)).max()
+#max_q = abs(Mast.variables.q_k - np.transpose(CT_q_sol)).max()
+#max_alfa = abs(Mast.variables.alfa_k - np.transpose(CT_alfa_sol)).max()
+#max_beta = abs(Mast.variables.beta_k - np.transpose(CT_beta_sol)).max()
+#l_1 = Mast.variables.l_k 
+#p_1 = Mast.variables.p_k
+#q_1 = Mast.variables.q_k
+#q_pos_1 = Mast.variables.q_pos_k
+#alfa_1 = Mast.variables.alfa_k 
+#beta_1 = Mast.variables.beta_k 
+#imp_1 = alfa_1.sum(axis=1) 
+#exp_1 = beta_1.sum(axis=1)
+#ie_1 = imp_1-exp_1
+#price_community = Mast.variables.price_comm
+#
+#
+#opt1 = np.empty(TMST)
+#ooo = np.empty(TMST)
+#for i1 in range(TMST):
+#    opt1[i1] = (sum(y0_c[i1,:]*l_1[i1,:] + mm_c[i1,:]/2*l_1[i1,:]*l_1[i1,:]) + sum(y0_g[i1,:]*p_1[i1,:] + mm_g[i1,:]/2*p_1[i1,:]*p_1[i1,:]) #+ el_price_e[i1]*ie_1[i1]
+#                + 0.001*sum(abs(q_1[i1,:])) + (el_price_e[i1]+0.1)*sum(alfa_1[i1,:]) - el_price_e[i1]*sum(beta_1[i1,:]))
+#    ooo[i1] = (sum(y0_c[i1,:]*CT_l_sol[:,i1] + mm_c[i1,:]/2*CT_l_sol[:,i1]*CT_l_sol[:,i1]) + sum(y0_g[i1,:]*CT_p_sol[:,i1] + mm_g[i1,:]/2*CT_p_sol[:,i1]*CT_p_sol[:,i1]) + 
+#                (el_price_e[i1]+0.1)*CT_imp_sol[i1] - el_price_e[i1]*CT_exp_sol[i1] + 0.001*sum(abs(CT_q_sol[:,i1]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
+#    
+#gap_opt1 = opt1-CT_obj_sol
+#gap_opt12 = opt1-ooo
 
 #%% BAL - definition of parameters and utility and cost curves
 #os.chdir(dd2)
@@ -472,122 +472,122 @@ plt.ylabel('Load comsumption [kWh]')
 plt.title('Load consumption prosumer #1')
 
 #%% Community CENTRALIZED solution with reserve
-n = 15
-TMST = 48
-RES_UP = imbalance_community[0::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
-RES_DW = RES_UP
-Agg_load_res = Agg_load[0::4]
-CR_UP = 0.005*np.ones([TMST,2*n])
-CR_DW = 0.005*np.ones([TMST,2*n])
-pi_res_UP = 0.05
-pi_res_DW = 0.05
-
-CT_p_sol = np.zeros((n,TMST))
-CT_l_sol = np.zeros((n,TMST))
-CT_q_sol = np.zeros((n,TMST))
-CT_r_UP_sol = np.zeros((2*n,TMST))
-CT_r_DW_sol = np.zeros((2*n,TMST))
-CT_R_UP_sol = np.zeros((2*n,TMST))
-CT_R_DW_sol = np.zeros((2*n,TMST))
-CT_alfa_sol = np.zeros((n,TMST))
-CT_beta_sol = np.zeros((n,TMST))
-CT_imp_sol = np.zeros(TMST)
-CT_exp_sol = np.zeros(TMST)
-CT_obj_sol = np.zeros(TMST)
-CT_price_sol = np.zeros((n,TMST))
-CT_price2_sol = np.zeros((3,TMST))
-
-for t in np.arange(0,TMST,24):  # for t = 0, 24
-    temp = range(t,t+24)
-    # Create a new model
-    CT_m = gb.Model("qp")
-    #CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
-    # Create variables
-    p = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-    l = np.array([CT_m.addVar(lb=-gb.GRB.INFINITY, ub=0) for i in range(n) for k in range(24)])
-    r_UP = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
-    r_DW = np.array([CT_m.addVar(lb=-gb.GRB.INFINITY, ub=0) for i in range(2*n) for k in range(24)])
-    R_UP = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
-    R_DW = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
-    q_imp = np.array([CT_m.addVar() for k in range(24)])
-    q_exp = np.array([CT_m.addVar() for k in range(24)])
-    alfa = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-    beta = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-    q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-    q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(24)]) 
-    gamma_i = (el_price_e[temp] + 0.1)
-    gamma_e = -el_price_e[temp]
-    CT_m.update()
-    
-    p = np.transpose(p.reshape(n,24))
-    l = np.transpose(l.reshape(n,24))
-    q = np.transpose(q.reshape(n,24))
-    q_pos = np.transpose(q_pos.reshape(n,24))
-    alfa = np.transpose(alfa.reshape(n,24))
-    beta = np.transpose(beta.reshape(n,24))
-    r_UP = np.transpose(r_UP.reshape(2*n,24)) 
-    r_DW = np.transpose(r_DW.reshape(2*n,24))
-    R_UP = np.transpose(R_UP.reshape(2*n,24))
-    R_DW = np.transpose(R_DW.reshape(2*n,24))
-    
-    
-    # Set objective: 
-    obj = (sum(sum(y0_c[temp,:]*l + mm_c[temp,:]/2*l*l) + sum(y0_g[temp,:]*p + mm_g[temp,:]/2*p*p)) +\
-           sum(gamma_i*q_imp + gamma_e*q_exp) + sum(0.001*sum(q_pos))) +\
-           sum(sum(CR_UP[temp,:]*R_UP) + sum(CR_DW[temp,:]*R_DW)) +\
-           pi_res_UP*(sum(-sum(y0_c[temp,:]*r_UP[:,n:] + mm_c[temp,:]/2*r_UP[:,n:]*r_UP[:,n:]) + sum(y0_g[temp,:]*r_UP[:,:n] + mm_g[temp,:]/2*r_UP[:,:n]*r_UP[:,:n]))) +\
-           pi_res_DW*(sum(-sum(y0_c[temp,:]*r_DW[:,n:] + mm_c[temp,:]/2*r_DW[:,n:]*r_DW[:,n:]) + sum(y0_g[temp,:]*r_DW[:,:n] + mm_g[temp,:]/2*r_DW[:,:n]*r_DW[:,:n])))
-    CT_m.setObjective(obj)
-    
-    # Add constraint
-    for k in range(24):
-        for i in range(n):
-            CT_m.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] == 0, name="pros[%s,%s]"% (k,i))
-            CT_m.addConstr(q[k,i] <= q_pos[k,i])
-            CT_m.addConstr(q[k,i] >= -q_pos[k,i])
-            CT_m.addConstr(p[k,i] - PV_old[k,i] + R_UP[k,i] <= Pmax[i], name="R_UP_limit_p[%s,%s]"% (k,i))
-            CT_m.addConstr(p[k,i] - PV_old[k,i] - R_DW[k,i] >= Pmin[i], name="R_DW_limit_p[%s,%s]"% (k,i))
-            CT_m.addConstr(l[k,i] + R_UP[k,i+n] <= Lmax[k,i], name="R_UP_limit_l[%s,%s]"% (k,i))
-            CT_m.addConstr(l[k,i] - R_DW[k,i+n] >= Lmin[k,i], name="R_DW_limit_l[%s,%s]"% (k,i))
-        for i in range(2*n):
-            CT_m.addConstr(r_UP[k,i] - R_UP[k,i]<= 0, name="r_UP_limit[%s,%s]"% (k,i))
-            CT_m.addConstr(-r_DW[k,i] - R_DW[k,i]<= 0, name="r_DW_limit[%s,%s]"% (k,i))
-        CT_m.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k))
-        CT_m.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
-        CT_m.addConstr(sum(beta[k,:]) - q_exp[k] == 0, name="exp_bal[%s]"%(k))
-        CT_m.addConstr(sum(r_UP[k,:]) - RES_UP[k] == 0, name="r_UP_requirement[%s]"%(k))
-        CT_m.addConstr(-sum(r_DW[k,:]) - RES_DW[k] == 0, name="r_DW_requirement[%s]"%(k))
-        
-    for i in range(n): #nell'arco di tutto il giorno i conti sul carico devono tornare 
-    #per ogni prosumer, ma l'ottimizzazione è fatta ora per ora
-        CT_m.addConstr(sum(Agg_load_res[temp,i] + l[:,i]) == 0)
-#        for j in np.arange(0,24,window):
-#            CT_m.addConstr(sum(Agg_load[range(t+j,t+j+window),i] + l[range(j,j+window),i]) == 0)
-    CT_m.update()    
-        
-    CT_m.optimize()
-    for k in range(24):
-        for i in range(n):
-            CT_price_sol[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
-            CT_p_sol[i,t+k] = p[k,i].x
-            CT_l_sol[i,t+k] = l[k,i].x
-            CT_q_sol[i,t+k] = q[k,i].x
-            CT_alfa_sol[i,t+k] = alfa[k,i].x
-            CT_beta_sol[i,t+k] = beta[k,i].x
-        for i in range(2*n):
-            CT_r_UP_sol[i,t+k] = r_UP[k,i].x
-            CT_r_DW_sol[i,t+k] = r_DW[k,i].x
-            CT_R_UP_sol[i,t+k] = R_UP[k,i].x
-            CT_R_DW_sol[i,t+k] = R_DW[k,i].x
-        CT_price2_sol[0,t+k] = CT_m.getConstrByName("comm[%s]"%k).Pi
-        CT_price2_sol[1,t+k] = CT_m.getConstrByName("imp_bal[%s]"%k).Pi
-        CT_price2_sol[2,t+k] = CT_m.getConstrByName("exp_bal[%s]"%k).Pi
-        CT_imp_sol[t+k] = q_imp[k].x
-        CT_exp_sol[t+k] = q_exp[k].x
-# http://www.gurobi.com/documentation/7.5/refman/attributes.html
-    del CT_m
-
-CT_IE_sol = CT_imp_sol - CT_exp_sol
+#n = 15
+#TMST = 48
+#RES_UP = imbalance_community[0::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
+#RES_DW = RES_UP
+#Agg_load_res = Agg_load[0::4]
+#CR_UP = 0.005*np.ones([TMST,2*n])
+#CR_DW = 0.005*np.ones([TMST,2*n])
+#pi_res_UP = 0.05
+#pi_res_DW = 0.05
+#
+#CT_p_sol = np.zeros((n,TMST))
+#CT_l_sol = np.zeros((n,TMST))
+#CT_q_sol = np.zeros((n,TMST))
+#CT_r_UP_sol = np.zeros((2*n,TMST))
+#CT_r_DW_sol = np.zeros((2*n,TMST))
+#CT_R_UP_sol = np.zeros((2*n,TMST))
+#CT_R_DW_sol = np.zeros((2*n,TMST))
+#CT_alfa_sol = np.zeros((n,TMST))
+#CT_beta_sol = np.zeros((n,TMST))
+#CT_imp_sol = np.zeros(TMST)
+#CT_exp_sol = np.zeros(TMST)
+#CT_obj_sol = np.zeros(TMST)
+#CT_price_sol = np.zeros((n,TMST))
+#CT_price2_sol = np.zeros((3,TMST))
+#
+#for t in np.arange(0,TMST,24):  # for t = 0, 24
+#    temp = range(t,t+24)
+#    # Create a new model
+#    CT_m = gb.Model("qp")
+#    #CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
+#    # Create variables
+#    p = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+#    l = np.array([CT_m.addVar(lb=-gb.GRB.INFINITY, ub=0) for i in range(n) for k in range(24)])
+#    r_UP = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
+#    r_DW = np.array([CT_m.addVar(lb=-gb.GRB.INFINITY, ub=0) for i in range(2*n) for k in range(24)])
+#    R_UP = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
+#    R_DW = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
+#    q_imp = np.array([CT_m.addVar() for k in range(24)])
+#    q_exp = np.array([CT_m.addVar() for k in range(24)])
+#    alfa = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+#    beta = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+#    q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+#    q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(24)]) 
+#    gamma_i = (el_price_e[temp] + 0.1)
+#    gamma_e = -el_price_e[temp]
+#    CT_m.update()
+#    
+#    p = np.transpose(p.reshape(n,24))
+#    l = np.transpose(l.reshape(n,24))
+#    q = np.transpose(q.reshape(n,24))
+#    q_pos = np.transpose(q_pos.reshape(n,24))
+#    alfa = np.transpose(alfa.reshape(n,24))
+#    beta = np.transpose(beta.reshape(n,24))
+#    r_UP = np.transpose(r_UP.reshape(2*n,24)) 
+#    r_DW = np.transpose(r_DW.reshape(2*n,24))
+#    R_UP = np.transpose(R_UP.reshape(2*n,24))
+#    R_DW = np.transpose(R_DW.reshape(2*n,24))
+#    
+#    
+#    # Set objective: 
+#    obj = (sum(sum(y0_c[temp,:]*l + mm_c[temp,:]/2*l*l) + sum(y0_g[temp,:]*p + mm_g[temp,:]/2*p*p)) +\
+#           sum(gamma_i*q_imp + gamma_e*q_exp) + sum(0.001*sum(q_pos))) +\
+#           sum(sum(CR_UP[temp,:]*R_UP) + sum(CR_DW[temp,:]*R_DW)) +\
+#           pi_res_UP*(sum(-sum(y0_c[temp,:]*r_UP[:,n:] + mm_c[temp,:]/2*r_UP[:,n:]*r_UP[:,n:]) + sum(y0_g[temp,:]*r_UP[:,:n] + mm_g[temp,:]/2*r_UP[:,:n]*r_UP[:,:n]))) +\
+#           pi_res_DW*(sum(-sum(y0_c[temp,:]*r_DW[:,n:] + mm_c[temp,:]/2*r_DW[:,n:]*r_DW[:,n:]) + sum(y0_g[temp,:]*r_DW[:,:n] + mm_g[temp,:]/2*r_DW[:,:n]*r_DW[:,:n])))
+#    CT_m.setObjective(obj)
+#    
+#    # Add constraint
+#    for k in range(24):
+#        for i in range(n):
+#            CT_m.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] == 0, name="pros[%s,%s]"% (k,i))
+#            CT_m.addConstr(q[k,i] <= q_pos[k,i])
+#            CT_m.addConstr(q[k,i] >= -q_pos[k,i])
+#            CT_m.addConstr(p[k,i] - PV_old[k,i] + R_UP[k,i] <= Pmax[i], name="R_UP_limit_p[%s,%s]"% (k,i))
+#            CT_m.addConstr(p[k,i] - PV_old[k,i] - R_DW[k,i] >= Pmin[i], name="R_DW_limit_p[%s,%s]"% (k,i))
+#            CT_m.addConstr(l[k,i] + R_UP[k,i+n] <= Lmax[k,i], name="R_UP_limit_l[%s,%s]"% (k,i))
+#            CT_m.addConstr(l[k,i] - R_DW[k,i+n] >= Lmin[k,i], name="R_DW_limit_l[%s,%s]"% (k,i))
+#        for i in range(2*n):
+#            CT_m.addConstr(r_UP[k,i] - R_UP[k,i]<= 0, name="r_UP_limit[%s,%s]"% (k,i))
+#            CT_m.addConstr(-r_DW[k,i] - R_DW[k,i]<= 0, name="r_DW_limit[%s,%s]"% (k,i))
+#        CT_m.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k))
+#        CT_m.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
+#        CT_m.addConstr(sum(beta[k,:]) - q_exp[k] == 0, name="exp_bal[%s]"%(k))
+#        CT_m.addConstr(sum(r_UP[k,:]) - RES_UP[k] == 0, name="r_UP_requirement[%s]"%(k))
+#        CT_m.addConstr(-sum(r_DW[k,:]) - RES_DW[k] == 0, name="r_DW_requirement[%s]"%(k))
+#        
+#    for i in range(n): #nell'arco di tutto il giorno i conti sul carico devono tornare 
+#    #per ogni prosumer, ma l'ottimizzazione è fatta ora per ora
+#        CT_m.addConstr(sum(Agg_load_res[temp,i] + l[:,i]) == 0)
+##        for j in np.arange(0,24,window):
+##            CT_m.addConstr(sum(Agg_load[range(t+j,t+j+window),i] + l[range(j,j+window),i]) == 0)
+#    CT_m.update()    
+#        
+#    CT_m.optimize()
+#    for k in range(24):
+#        for i in range(n):
+#            CT_price_sol[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
+#            CT_p_sol[i,t+k] = p[k,i].x
+#            CT_l_sol[i,t+k] = l[k,i].x
+#            CT_q_sol[i,t+k] = q[k,i].x
+#            CT_alfa_sol[i,t+k] = alfa[k,i].x
+#            CT_beta_sol[i,t+k] = beta[k,i].x
+#        for i in range(2*n):
+#            CT_r_UP_sol[i,t+k] = r_UP[k,i].x
+#            CT_r_DW_sol[i,t+k] = r_DW[k,i].x
+#            CT_R_UP_sol[i,t+k] = R_UP[k,i].x
+#            CT_R_DW_sol[i,t+k] = R_DW[k,i].x
+#        CT_price2_sol[0,t+k] = CT_m.getConstrByName("comm[%s]"%k).Pi
+#        CT_price2_sol[1,t+k] = CT_m.getConstrByName("imp_bal[%s]"%k).Pi
+#        CT_price2_sol[2,t+k] = CT_m.getConstrByName("exp_bal[%s]"%k).Pi
+#        CT_imp_sol[t+k] = q_imp[k].x
+#        CT_exp_sol[t+k] = q_exp[k].x
+## http://www.gurobi.com/documentation/7.5/refman/attributes.html
+#    del CT_m
+#
+#CT_IE_sol = CT_imp_sol - CT_exp_sol
             
 #%% SCENARIOS
 
@@ -847,78 +847,78 @@ if scenario == 6:
     imbal_cost_p_perunit_imbal_6 = -abs(imbal_cost_p_6)/imbalance_prosumer
     
 
-#%% pics
-# prosumers' costs per unit of imbalance accross scenarios
-fig_perunit_cost = plt.figure(1,figsize=[10,6])
-ax1, = plt.plot(imbal_cost_p_perunit_imbal_1,label='scenario 1F')
-ax2, = plt.plot(imbal_cost_p_perunit_imbal_2,label='scenario 1D')
-ax3, = plt.plot(imbal_cost_p_perunit_imbal_3,label='scenario 2F')
-ax4, = plt.plot(imbal_cost_p_perunit_imbal_4,label='scenario 2D')
-ax5, = plt.plot(imbal_cost_p_perunit_imbal_5,label='scenario 3F',linestyle='dashed')
-ax6, = plt.plot(imbal_cost_p_perunit_imbal_6,label='scenario 3D',linestyle='dashed')
-plt.legend([ax1, ax2, ax3, ax4, ax5, ax6], ['scenario 1F', 'scenario 1D','scenario 2F', 'scenario 2D','scenario 3F', 'scenario 3D'])
-plt.xlabel('time [15 mins intervals]')
-plt.ylabel('cost per unit of imbalance [AUD/kWh]')
-plt.title('prosumers\' costs per unit of imbalance accross scenarios')
-plt.savefig('figures/perunit_cost_scenarios.png', bbox_inches='tight')
-# production costs prosumers
-fig_prod_cost_67 = plt.figure(2,figsize=[10,6])
-ax1, = plt.plot(y0_g_bal[:192,7],label='prosumer 7, intercept')
-ax2, = plt.plot(y0_g_bal[:192,6],label='prosumer 6, intercept',linestyle='dashed')
-ax3, = plt.plot(mm_g_bal[:192,7],label='prosumer 7, ang. coefficient')
-ax4, = plt.plot(mm_g_bal[:192,6],label='prosumer 6, ang. coefficient',linestyle='dashed')
-plt.legend([ax1, ax2, ax3, ax4], ['prosumer 7, intercept', 'prosumer 6, intercept','prosumer 7, ang. coefficient', 'prosumer 6, ang. coefficient'])
-plt.xlabel('time [15 mins intervals]')
-plt.ylabel('production cost [AUD/kWh]')
-plt.title('production costs prosumers #6 and #7')
-plt.savefig('figures/cost6n7.png', bbox_inches='tight')
-# consumption utility prosumers
-fig_cons_util_67 = plt.figure(3,figsize=[10,6])
-ax1, = plt.plot(y0_c_bal[:192,7],label='prosumer 7, intercept')
-ax2, = plt.plot(y0_c_bal[:192,6],label='prosumer 6, intercept',linestyle='dashed')
-ax3, = plt.plot(mm_c_bal[:192,7],label='prosumer 7, ang. coefficient')
-ax4, = plt.plot(mm_c_bal[:192,6],label='prosumer 6, ang. coefficient',linestyle='dashed')
-plt.legend([ax1, ax2, ax3, ax4], ['prosumer 7, intercept', 'prosumer 6, intercept','prosumer 7, ang. coefficient', 'prosumer 6, ang. coefficient'])
-plt.xlabel('time [15 mins intervals]')
-plt.ylabel('consumption utility [AUD/kWh]')
-plt.title('consumption utility prosumers #6 and #7')
-plt.savefig('figures/utility6n7.png', bbox_inches='tight')
-# production costs prosumers
-fig_prod_cost_57 = plt.figure(4,figsize=[10,6])
-ax1, = plt.plot(y0_g_bal[:192,7],label='prosumer 7, intercept')
-ax2, = plt.plot(y0_g_bal[:192,5],label='prosumer 5, intercept',linestyle='dashed')
-ax3, = plt.plot(mm_g_bal[:192,7],label='prosumer 7, ang. coefficient')
-ax4, = plt.plot(mm_g_bal[:192,5],label='prosumer 5, ang. coefficient',linestyle='dashed')
-plt.legend([ax1, ax2, ax3, ax4], ['prosumer 7, intercept', 'prosumer 5, intercept','prosumer 7, ang. coefficient', 'prosumer 5, ang. coefficient'])
-plt.xlabel('time [15 mins intervals]')
-plt.ylabel('production cost [AUD/kWh]')
-plt.title('production costs prosumers #5 and #7')
-plt.savefig('figures/cost5n7.png', bbox_inches='tight')
-# consumption utility prosumers
-fig_cons_util_57 = plt.figure(5,figsize=[10,6])
-ax1, = plt.plot(y0_c_bal[:192,7],label='prosumer 7, intercept')
-ax2, = plt.plot(y0_c_bal[:192,5],label='prosumer 5, intercept',linestyle='dashed')
-ax3, = plt.plot(mm_c_bal[:192,7],label='prosumer 7, ang. coefficient')
-ax4, = plt.plot(mm_c_bal[:192,5],label='prosumer 5, ang. coefficient',linestyle='dashed')
-plt.legend([ax1, ax2, ax3, ax4], ['prosumer 7, intercept', 'prosumer 5, intercept','prosumer 7, ang. coefficient', 'prosumer 5, ang. coefficient'])
-plt.xlabel('time [15 mins intervals]')
-plt.ylabel('consumption utility [AUD/kWh]')
-plt.title('consumption utility prosumers #5 and #7')
-plt.savefig('figures/utility5n7.png', bbox_inches='tight')
-# total costs accross scenarios
-imbal_cost_135 = np.array((imbal_cost_1,imbal_cost_3,imbal_cost_5))
-imbal_cost_246 = np.array((imbal_cost_2,imbal_cost_4,imbal_cost_6))
-xlab = ['Scenario 1','Scenario 2','Scenario 3']
-tot_cost = plt.figure(6,figsize=[10,6])
-ax = tot_cost.add_subplot(111)
-res = pd.DataFrame([imbal_cost_135, imbal_cost_246],index=['Fixed tariff', 'Dynamic tariff'],columns=xlab).transpose()
-df_plot = pd.DataFrame([imbal_cost_135, imbal_cost_246],index=['Fixed tariff', 'Dynamic tariff'],columns=xlab).transpose()
-df_plot.plot(kind='bar',ax=ax)
-plt.xticks(rotation=360)
-plt.ylabel('Total imbalance costs [AUD/kWh]')
-plt.tight_layout()
-plt.grid()
-plt.savefig('figures/total_imbal_barchart.png', bbox_inches='tight')
+##%% pics
+## prosumers' costs per unit of imbalance accross scenarios
+#fig_perunit_cost = plt.figure(1,figsize=[10,6])
+#ax1, = plt.plot(imbal_cost_p_perunit_imbal_1,label='scenario 1F')
+#ax2, = plt.plot(imbal_cost_p_perunit_imbal_2,label='scenario 1D')
+#ax3, = plt.plot(imbal_cost_p_perunit_imbal_3,label='scenario 2F')
+#ax4, = plt.plot(imbal_cost_p_perunit_imbal_4,label='scenario 2D')
+#ax5, = plt.plot(imbal_cost_p_perunit_imbal_5,label='scenario 3F',linestyle='dashed')
+#ax6, = plt.plot(imbal_cost_p_perunit_imbal_6,label='scenario 3D',linestyle='dashed')
+#plt.legend([ax1, ax2, ax3, ax4, ax5, ax6], ['scenario 1F', 'scenario 1D','scenario 2F', 'scenario 2D','scenario 3F', 'scenario 3D'])
+#plt.xlabel('time [15 mins intervals]')
+#plt.ylabel('cost per unit of imbalance [AUD/kWh]')
+#plt.title('prosumers\' costs per unit of imbalance accross scenarios')
+#plt.savefig('figures/perunit_cost_scenarios.png', bbox_inches='tight')
+## production costs prosumers
+#fig_prod_cost_67 = plt.figure(2,figsize=[10,6])
+#ax1, = plt.plot(y0_g_bal[:192,7],label='prosumer 7, intercept')
+#ax2, = plt.plot(y0_g_bal[:192,6],label='prosumer 6, intercept',linestyle='dashed')
+#ax3, = plt.plot(mm_g_bal[:192,7],label='prosumer 7, ang. coefficient')
+#ax4, = plt.plot(mm_g_bal[:192,6],label='prosumer 6, ang. coefficient',linestyle='dashed')
+#plt.legend([ax1, ax2, ax3, ax4], ['prosumer 7, intercept', 'prosumer 6, intercept','prosumer 7, ang. coefficient', 'prosumer 6, ang. coefficient'])
+#plt.xlabel('time [15 mins intervals]')
+#plt.ylabel('production cost [AUD/kWh]')
+#plt.title('production costs prosumers #6 and #7')
+#plt.savefig('figures/cost6n7.png', bbox_inches='tight')
+## consumption utility prosumers
+#fig_cons_util_67 = plt.figure(3,figsize=[10,6])
+#ax1, = plt.plot(y0_c_bal[:192,7],label='prosumer 7, intercept')
+#ax2, = plt.plot(y0_c_bal[:192,6],label='prosumer 6, intercept',linestyle='dashed')
+#ax3, = plt.plot(mm_c_bal[:192,7],label='prosumer 7, ang. coefficient')
+#ax4, = plt.plot(mm_c_bal[:192,6],label='prosumer 6, ang. coefficient',linestyle='dashed')
+#plt.legend([ax1, ax2, ax3, ax4], ['prosumer 7, intercept', 'prosumer 6, intercept','prosumer 7, ang. coefficient', 'prosumer 6, ang. coefficient'])
+#plt.xlabel('time [15 mins intervals]')
+#plt.ylabel('consumption utility [AUD/kWh]')
+#plt.title('consumption utility prosumers #6 and #7')
+#plt.savefig('figures/utility6n7.png', bbox_inches='tight')
+## production costs prosumers
+#fig_prod_cost_57 = plt.figure(4,figsize=[10,6])
+#ax1, = plt.plot(y0_g_bal[:192,7],label='prosumer 7, intercept')
+#ax2, = plt.plot(y0_g_bal[:192,5],label='prosumer 5, intercept',linestyle='dashed')
+#ax3, = plt.plot(mm_g_bal[:192,7],label='prosumer 7, ang. coefficient')
+#ax4, = plt.plot(mm_g_bal[:192,5],label='prosumer 5, ang. coefficient',linestyle='dashed')
+#plt.legend([ax1, ax2, ax3, ax4], ['prosumer 7, intercept', 'prosumer 5, intercept','prosumer 7, ang. coefficient', 'prosumer 5, ang. coefficient'])
+#plt.xlabel('time [15 mins intervals]')
+#plt.ylabel('production cost [AUD/kWh]')
+#plt.title('production costs prosumers #5 and #7')
+#plt.savefig('figures/cost5n7.png', bbox_inches='tight')
+## consumption utility prosumers
+#fig_cons_util_57 = plt.figure(5,figsize=[10,6])
+#ax1, = plt.plot(y0_c_bal[:192,7],label='prosumer 7, intercept')
+#ax2, = plt.plot(y0_c_bal[:192,5],label='prosumer 5, intercept',linestyle='dashed')
+#ax3, = plt.plot(mm_c_bal[:192,7],label='prosumer 7, ang. coefficient')
+#ax4, = plt.plot(mm_c_bal[:192,5],label='prosumer 5, ang. coefficient',linestyle='dashed')
+#plt.legend([ax1, ax2, ax3, ax4], ['prosumer 7, intercept', 'prosumer 5, intercept','prosumer 7, ang. coefficient', 'prosumer 5, ang. coefficient'])
+#plt.xlabel('time [15 mins intervals]')
+#plt.ylabel('consumption utility [AUD/kWh]')
+#plt.title('consumption utility prosumers #5 and #7')
+#plt.savefig('figures/utility5n7.png', bbox_inches='tight')
+## total costs accross scenarios
+#imbal_cost_135 = np.array((imbal_cost_1,imbal_cost_3,imbal_cost_5))
+#imbal_cost_246 = np.array((imbal_cost_2,imbal_cost_4,imbal_cost_6))
+#xlab = ['Scenario 1','Scenario 2','Scenario 3']
+#tot_cost = plt.figure(6,figsize=[10,6])
+#ax = tot_cost.add_subplot(111)
+#res = pd.DataFrame([imbal_cost_135, imbal_cost_246],index=['Fixed tariff', 'Dynamic tariff'],columns=xlab).transpose()
+#df_plot = pd.DataFrame([imbal_cost_135, imbal_cost_246],index=['Fixed tariff', 'Dynamic tariff'],columns=xlab).transpose()
+#df_plot.plot(kind='bar',ax=ax)
+#plt.xticks(rotation=360)
+#plt.ylabel('Total imbalance costs [AUD/kWh]')
+#plt.tight_layout()
+#plt.grid()
+#plt.savefig('figures/total_imbal_barchart.png', bbox_inches='tight')
 
 #%% ADMM optimisation BAL via master-sub classes - it should be OK - check the attributes
 from ADMM_master_bal import ADMM_Master_bal
@@ -960,13 +960,14 @@ ie_1 = imp_1-exp_1
 opt1 = np.empty(TMST)
 ooo = np.empty(TMST)
 for i1 in range(TMST):
-    opt1[i1] = (sum(y0_c[i1,:]*l_1[i1,:] + mm_c[i1,:]/2*l_1[i1,:]*l_1[i1,:]) + sum(y0_g[i1,:]*p_1[i1,:] + mm_g[i1,:]/2*p_1[i1,:]*p_1[i1,:]) #+ el_price_e[i1]*ie_1[i1]
-                + 0.001*sum(abs(q_1[i1,:])) + (el_price_e[i1]+0.1)*sum(alfa_1[i1,:]) - el_price_e[i1]*sum(beta_1[i1,:]))
-    ooo[i1] = (sum(y0_c[i1,:]*CT_l_sol_bal[:,i1] + mm_c[i1,:]/2*CT_l_sol_bal[:,i1]*CT_l_sol_bal[:,i1]) + sum(y0_g_bal[i1,:]*CT_p_sol_bal[:,i1] + mm_g[i1,:]/2*CT_p_sol_bal[:,i1]*CT_p_sol_bal[:,i1]) + 
-                (el_price_e[i1]+0.1)*CT_imp_sol_bal[i1] - el_price_e[i1]*CT_exp_sol_bal[i1] + 0.001*sum(abs(CT_q_sol_bal[:,i1]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
+    opt1[i1] = (sum(y0_c_bal[i1,:]*l_1[i1,:] + mm_c_bal[i1,:]/2*l_1[i1,:]*l_1[i1,:]) + sum(y0_g_bal[i1,:]*p_1[i1,:] + mm_g_bal[i1,:]/2*p_1[i1,:]*p_1[i1,:]) #+ el_price_e[i1]*ie_1[i1]
+                + 0.001*sum(abs(q_1[i1,:])) + (el_price_imp[i1])*sum(alfa_1[i1,:]) - el_price_exp[i1]*sum(beta_1[i1,:]))
+    ooo[i1] = (sum(y0_c_bal[i1,:]*CT_l_sol_bal[:,i1] + mm_c_bal[i1,:]/2*CT_l_sol_bal[:,i1]*CT_l_sol_bal[:,i1]) + sum(y0_g_bal[i1,:]*CT_p_sol_bal[:,i1] + mm_g_bal[i1,:]/2*CT_p_sol_bal[:,i1]*CT_p_sol_bal[:,i1]) + 
+                (el_price_imp[i1])*CT_imp_sol_bal[i1] - el_price_exp[i1]*CT_exp_sol_bal[i1] + 0.001*sum(abs(CT_q_sol_bal[:,i1]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
     
-gap_opt1 = opt1-CT_obj_sol
+#gap_opt1 = opt1-CT_obj_sol
 gap_opt12 = opt1-ooo
+gap_opt = (opt1-ooo)/ooo
 #%% Save Results
 #import shelve
 #filename='Res_14_07_1.out'

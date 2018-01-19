@@ -149,9 +149,10 @@ class ADMM_Master_bal:
             res10 = []
             self._model_update(t)
             flag = 0
-            stack = 1000*np.ones(100)
+            lll = 20
+            stack = 1000*np.ones(lll)
             
-            while (np.linalg.norm(real_rk)>self.data.tol or self.variables.s_k>self.data.tol) and self.variables.iter<10000 and np.linalg.norm(real_rk)<10**10: #np.linalg.norm
+            while (np.linalg.norm(real_rk)>self.data.tol or self.variables.s_k>self.data.tol) and self.variables.iter<1000 and np.linalg.norm(real_rk)<10**10: #np.linalg.norm
                 self.variables.iter = self.variables.iter +1
                 
                 #Solve subproblems
@@ -178,13 +179,13 @@ class ADMM_Master_bal:
                 self.variables.r_k[range(96,192)] = (self.variables.alfa_k[self.temp,:].sum(axis=1) - self.variables.pow_imp[self.temp])
                 self.variables.r_k[range(192,288)] = self.variables.beta_k[self.temp,:].sum(axis=1) - self.variables.pow_exp[self.temp]
 
-                if max(abs(np.linalg.norm(self.variables.r_k)*np.ones(100)-stack))<0.01*np.linalg.norm(self.variables.r_k) and self.data.sigma<1:
+                if max(abs(np.linalg.norm(self.variables.r_k)*np.ones(lll)-stack))<0.01*np.linalg.norm(self.variables.r_k) and self.data.sigma<1:
                     self.data.sigma = self.data.sigma*2
-                    stack = 100*np.ones(100)
-                elif np.linalg.norm(self.variables.r_k)-np.mean(stack)>0.1*np.linalg.norm(self.variables.r_k):
+                    stack = 100*np.ones(lll)
+                elif np.linalg.norm(self.variables.r_k)-np.mean(stack)>0.5*np.linalg.norm(self.variables.r_k):
                     self.data.sigma = self.data.sigma/3
-                    stack = 100*np.ones(100)
-                stack[range(1,100)] = np.copy(stack[range(0,99)])
+                    stack = 100*np.ones(lll)
+                stack[range(1,lll)] = np.copy(stack[range(0,lll-1)])
                 stack[0] = np.linalg.norm(self.variables.r_k)
 
                 Dimp = self.variables.pow_imp[self.temp]-imp_old
