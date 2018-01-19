@@ -100,7 +100,7 @@ class ADMM_Pros_bal:
     def _build_constraint_(self,):
         m = self.model
         for k in range(96):
-            m.addConstr(self.variables.load[k] + self.variables.power[k] + self.variables.q[k] + self.variables.alfa[k] - self.variables.beta[k] + self.data.deltaPV[k] - self.data.deltaLoad[k] == 0, name="pow_bal[%s]"%k) 
+            m.addConstr(self.variables.load[k] + self.variables.power[k] + self.variables.q[k] + self.variables.alfa[k] - self.variables.beta[k] + self.deltaPV[k] - self.deltaLoad[k] == 0, name="pow_bal[%s]"%k) 
             m.addConstr(self.variables.q[k] <= self.variables.q_pos[k])
             m.addConstr(self.variables.q[k] >= -self.variables.q_pos[k])
 #        t = self.MP.temp[0]
