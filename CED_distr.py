@@ -198,7 +198,15 @@ for p in range(15):
             price_comply[t,p] = (CT_l_sol.T[t,p]>=Lmin[t,p])&(CT_l_sol.T[t,p]<=Lmax[t,p])
             case[t,p] = 3
 
-
+cost_DA_tp = np.zeros([TMST,n]) 
+for t in range(TMST):
+    for p in range(n):
+        cost_DA_tp[t,p] = y0_c[t,p]*CT_l_sol[p,t] + mm_c[t,p]/2*CT_l_sol[p,t]*CT_l_sol[p,t] + y0_g[t,p]*CT_p_sol[p,t] + mm_g[t,p]/2*CT_p_sol[p,t]*CT_p_sol[p,t]+\
+                          CT_alfa_sol[p,t]*CT_imp_sol[t] + CT_beta_sol[p,t]*CT_exp_sol[t] + 0.001*abs(CT_q_sol[p,t])
+        
+cost_DA_tp_rep = np.repeat(cost_DA_tp, 4, axis=0)
+cost_DA_p = np.sum(cost_DA_tp_rep, axis=0)
+cost_DA = np.sum(cost_DA_p)
 
 #%% ADMM optimisation CED via master-sub classes
 from ADMM_master import ADMM_Master
@@ -266,42 +274,43 @@ Flex_load = d['Flex_load']
 
 TMST=48*4
 # data extension 1h --> 15 mins (repeat each row 4 times)
-b2 = np.repeat(b2, 4, axis=0)
-c2 = np.repeat(c2, 4, axis=0)
-b1 = np.repeat(b1, 4, axis=0)
-c1 = np.repeat(c1, 4, axis=0)
-PV = np.repeat(PV, 4, axis=0)
-Load = np.repeat(Load, 4, axis=0)
-Flex_load = np.repeat(Flex_load, 4, axis=0)
+b2_bal = np.repeat(b2, 4, axis=0)
+c2_bal = np.repeat(c2, 4, axis=0)
+b1_bal = np.repeat(b1, 4, axis=0)
+c1_bal = np.repeat(c1, 4, axis=0)
+PV_old = PV
+PV_bal = np.repeat(PV, 4, axis=0)
+Load_bal = np.repeat(Load, 4, axis=0)
+Flex_load_bal = np.repeat(Flex_load, 4, axis=0)
 
 
 # create noise for PV (only if PV nonzero) 
-noise_PV = np.random.normal(0,0.1,(PV.shape))
-for row in range(noise_PV.shape[0]):
-    for col in range(noise_PV.shape[1]):
-        if PV[row,col] == 0:
-            noise_PV[row,col] = 0
+noise_PV_bal = np.random.normal(0,0.1,(PV_bal.shape))
+for row in range(noise_PV_bal.shape[0]):
+    for col in range(noise_PV_bal.shape[1]):
+        if PV_bal[row,col] == 0:
+            noise_PV_bal[row,col] = 0
             
 # adding noise to PV (and if the result is less than zero bring it to zero)
-PV_real = PV + noise_PV
+PV_real = PV_bal + noise_PV_bal
 for row in range(PV_real.shape[0]):
     for col in range(PV_real.shape[1]):
         if PV_real[row,col] < 0:
             PV_real[row,col] = 0
 
 # create noise for Load
-noise_Load = np.random.normal(0,0.1,(Load.shape))
+noise_Load_bal = np.random.normal(0,0.1,(Load_bal.shape))
 
 # adding noise to Load (and if the result is less than zero bring it to zero)
-Load_real = Load + noise_Load
+Load_real = Load_bal + noise_Load_bal
 for row in range(Load_real.shape[0]):
     for col in range(Load_real.shape[1]):
         if Load_real[row,col] < 0:
             Load_real[row,col] = 0
             
 # IMBALANCES
-deltaPV = PV_real - PV
-deltaLoad = Load_real - Load
+deltaPV = PV_real - PV_bal
+deltaLoad = Load_real - Load_bal
 deltaPV_prosumer = np.empty([n])
 deltaLoad_prosumer = np.empty([n])
 deltaPV_community = np.empty([TMST])
@@ -323,14 +332,14 @@ average_imbal_community = np.average(imbalance_community)
 
 
 # aggregated load before and after imbalance            
-Agg_load = Load + Flex_load
-Agg_load_real = Load_real + Flex_load
+#Agg_load = Load + Flex_load
+#Agg_load_real = Load_real + Flex_load
 
 # other stuff - including: How many days to RUN
 PostCode = d['PostCode']
 os.chdir(dd1)
-n = b2.shape[1]
-g = b1.shape[1]
+n = b2_bal.shape[1]
+g = b1_bal.shape[1]
 TMST = 48*4#b2.shape[0] # *4 because now we have 15 mins time intervals
 
 # retrieving and extending (1h --> 15min) set points and DA price from DA stage
@@ -358,13 +367,13 @@ Lmax_bal = np.zeros((TMST,n))
 Lmin_bal = np.zeros((TMST,n))
 for t in range(TMST):
     for p in range(n):
-        Pmax_bal[t,p] = Pmax_DA[p] + PV[t,p] - p_tilde[t,p] 
-        Pmin_bal[t,p] = Pmin_DA[p] + PV[t,p] - p_tilde[t,p]
+        Pmax_bal[t,p] = Pmax_DA[p] + PV_bal[t,p] - p_tilde[t,p] 
+        Pmin_bal[t,p] = Pmin_DA[p] + PV_bal[t,p] - p_tilde[t,p]
         Lmax_bal[t,p] = Lmax_DA[t,p] - l_tilde[t,p]
         Lmin_bal[t,p] = Lmin_DA[t,p] - l_tilde[t,p]
 
     
-# TRASLATING the CURVES - using directly the DA price - CHECK if the results are the same as with the other method
+# SHIFTING the CURVES - using directly the DA price - CHECK if the results are the same as with the other method
 y0_c_bal = np.zeros((TMST,n))
 y0_g_bal = np.zeros((TMST,n))
 
@@ -465,10 +474,11 @@ plt.title('Load consumption prosumer #1')
 #%% Community CENTRALIZED solution with reserve
 n = 15
 TMST = 48
-RES_UP = imbalance_community        # reserve requirement - set depending on the average imbalance of the community each hour
+RES_UP = imbalance_community[0::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
 RES_DW = RES_UP
-CR_UP = 0.001*np.ones([TMST,2*n])
-CR_DW = 0.001*np.ones([TMST,2*n])
+Agg_load_res = Agg_load[0::4]
+CR_UP = 0.005*np.ones([TMST,2*n])
+CR_DW = 0.005*np.ones([TMST,2*n])
 pi_res_UP = 0.05
 pi_res_DW = 0.05
 
@@ -525,8 +535,8 @@ for t in np.arange(0,TMST,24):  # for t = 0, 24
     obj = (sum(sum(y0_c[temp,:]*l + mm_c[temp,:]/2*l*l) + sum(y0_g[temp,:]*p + mm_g[temp,:]/2*p*p)) +\
            sum(gamma_i*q_imp + gamma_e*q_exp) + sum(0.001*sum(q_pos))) +\
            sum(sum(CR_UP[temp,:]*R_UP) + sum(CR_DW[temp,:]*R_DW)) +\
-           pi_res_UP*(sum(-sum(y0_c[temp,:]*r_UP[:,n:] + mm_c[temp,:]/2*r_UP[:,n:]*r_UP[:,n:]) - sum(y0_g[temp,:]*r_UP[:,:n] + mm_g[temp,:]/2*r_UP[:,:n]*r_UP[:,:n]))) +\
-           pi_res_DW*(sum(-sum(y0_c[temp,:]*r_DW[:,n:] + mm_c[temp,:]/2*r_DW[:,n:]*r_DW[:,n:]) - sum(y0_g[temp,:]*r_DW[:,:n] + mm_g[temp,:]/2*r_DW[:,:n]*r_DW[:,:n])))
+           pi_res_UP*(sum(-sum(y0_c[temp,:]*r_UP[:,n:] + mm_c[temp,:]/2*r_UP[:,n:]*r_UP[:,n:]) + sum(y0_g[temp,:]*r_UP[:,:n] + mm_g[temp,:]/2*r_UP[:,:n]*r_UP[:,:n]))) +\
+           pi_res_DW*(sum(-sum(y0_c[temp,:]*r_DW[:,n:] + mm_c[temp,:]/2*r_DW[:,n:]*r_DW[:,n:]) + sum(y0_g[temp,:]*r_DW[:,:n] + mm_g[temp,:]/2*r_DW[:,:n]*r_DW[:,:n])))
     CT_m.setObjective(obj)
     
     # Add constraint
@@ -535,8 +545,8 @@ for t in np.arange(0,TMST,24):  # for t = 0, 24
             CT_m.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] == 0, name="pros[%s,%s]"% (k,i))
             CT_m.addConstr(q[k,i] <= q_pos[k,i])
             CT_m.addConstr(q[k,i] >= -q_pos[k,i])
-            CT_m.addConstr(p[k,i] - PV[k,i] + R_UP[k,i] <= Pmax[i], name="R_UP_limit_p[%s,%s]"% (k,i))
-            CT_m.addConstr(p[k,i] - PV[k,i] - R_DW[k,i] >= Pmin[i], name="R_DW_limit_p[%s,%s]"% (k,i))
+            CT_m.addConstr(p[k,i] - PV_old[k,i] + R_UP[k,i] <= Pmax[i], name="R_UP_limit_p[%s,%s]"% (k,i))
+            CT_m.addConstr(p[k,i] - PV_old[k,i] - R_DW[k,i] >= Pmin[i], name="R_DW_limit_p[%s,%s]"% (k,i))
             CT_m.addConstr(l[k,i] + R_UP[k,i+n] <= Lmax[k,i], name="R_UP_limit_l[%s,%s]"% (k,i))
             CT_m.addConstr(l[k,i] - R_DW[k,i+n] >= Lmin[k,i], name="R_DW_limit_l[%s,%s]"% (k,i))
         for i in range(2*n):
@@ -550,7 +560,7 @@ for t in np.arange(0,TMST,24):  # for t = 0, 24
         
     for i in range(n): #nell'arco di tutto il giorno i conti sul carico devono tornare 
     #per ogni prosumer, ma l'ottimizzazione è fatta ora per ora
-        CT_m.addConstr(sum(Agg_load[temp,i] + l[:,i]) == 0)
+        CT_m.addConstr(sum(Agg_load_res[temp,i] + l[:,i]) == 0)
 #        for j in np.arange(0,24,window):
 #            CT_m.addConstr(sum(Agg_load[range(t+j,t+j+window),i] + l[range(j,j+window),i]) == 0)
     CT_m.update()    
@@ -619,10 +629,12 @@ for t in range(TMST):
         if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
             imbal_cost_1[t,p] = - ret_price_imp*(deltaPV[t,p]-deltaLoad[t,p])
         else:
-            imbal_cost_1[t,p] = -ret_price_exp*(deltaPV[t,p]-deltaLoad[t,p])
+            imbal_cost_1[t,p] = - ret_price_exp*(deltaPV[t,p]-deltaLoad[t,p])
 imbal_cost_p_1 = np.sum(imbal_cost_1, axis = 0)
 imbal_cost_p_perunit_imbal_1 = -abs(imbal_cost_p_1)/imbalance_prosumer
 imbal_cost_1 = np.sum(imbal_cost_1)
+total_p_1 = imbal_cost_p_1 + cost_DA_p
+total_1 = imbal_cost_1 + cost_DA
 
 # scenario 2 - dynamic tariff - 2 price system
 imbal_cost_2 = np.zeros([TMST,n])
@@ -643,7 +655,8 @@ for t in range(TMST):
 imbal_cost_p_2 = np.sum(imbal_cost_2, axis = 0)
 imbal_cost_p_perunit_imbal_2 = -abs(imbal_cost_p_2)/imbalance_prosumer
 imbal_cost_2 = np.sum(imbal_cost_2)
-
+total_p_2 = imbal_cost_p_2 + cost_DA_p
+total_2 = imbal_cost_2 + cost_DA
 
 # SCENARI INTERMEDI
 imbal_cost_3 = np.zeros([TMST])
@@ -658,6 +671,8 @@ imbal_cost_p_3 = np.empty(n)
 for p in range(n):
     imbal_cost_p_3[p] = imbal_weights[p]*imbal_cost_3
 imbal_cost_p_perunit_imbal_3 = imbal_cost_p_3/abs(imbalance_prosumer)
+total_p_3 = imbal_cost_p_3 + cost_DA_p
+total_3 = imbal_cost_3 + cost_DA
 
 imbal_cost_4 = np.zeros([TMST])
 for t in range(TMST):
@@ -679,11 +694,12 @@ imbal_cost_p_4 = np.empty(n)
 for p in range(n):
     imbal_cost_p_4[p] = imbal_weights[p]*imbal_cost_4
 imbal_cost_p_perunit_imbal_4 = imbal_cost_p_4/abs(imbalance_prosumer)
-
+total_p_4 = imbal_cost_p_4 + cost_DA_p
+total_4 = imbal_cost_4 + cost_DA
 
 #%% Community BALANCING - CENTRALIZED solution - SCENARIO 5 and 6
 # choose here:
-scenario = 6
+scenario = 5
 
 CT_p_sol_bal = np.zeros((g,TMST))
 CT_l_sol_bal = np.zeros((n,TMST))
@@ -793,12 +809,15 @@ if scenario == 5:
         for p in range(n):
             costrev_5[t,p] =0.001*abs(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] + CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1) + \
                             y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-            #numerator_5[p,t] = -0.001*abs(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] - CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1)
-            #denominator_5[p,t] = CT_l_sol_bal[p,t] + CT_p_sol_bal[p,t]
-#    perceived_price_5 = np.sum(numerator_5, axis = 0)/np.sum(denominator_5, axis = 0)
-#    sigma_5 = np.std(perceived_price_5)
-#    sigmaMax_5 = 0.1
-#    QoE_5 = 1 - sigma_5/sigmaMax_5
+            numerator_5[t,p] = -(-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] - CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1)
+            denominator_5[t,p] = CT_beta_sol_bal[p,t] - CT_alfa_sol_bal[p,t] - CT_q_sol_bal[p,t]
+#            if abs(denominator_5[t,p]) < 10*1e-4:
+#                denominator_5[t,p] = 0
+    perceived_price_5 = np.sum(numerator_5, axis = 0)/np.sum(denominator_5, axis = 0)
+#    perceived_price_5[np.isinf(perceived_price_5)] = 0
+    sigma_5 = np.std(perceived_price_5)
+    sigmaMax_5 = max(perceived_price_5) - min(perceived_price_5)
+    QoE_5 = 1 - sigma_5/sigmaMax_5
     imbal_cost_p_5 = np.sum(costrev_5, axis=0)
     costrev_5_tot = np.sum(imbal_cost_p_5) # just to check that this is equal to imbal_cost_5
     imbal_cost_p_perunit_imbal_5 = -abs(imbal_cost_p_5)/imbalance_prosumer
@@ -909,13 +928,17 @@ asynch = -100
 weight = 1/n
 
 # redifining names (so I dont have to change all the names in the function)
-
-Pmin = Pmin_bal
-Pmax = Pmax_bal
-# Load and Flex_load? and PV? do we want the final result or the variation needed? ask Fabio
-
+scenario = 5
+PV_admm = np.zeros([8760*4,15])
+# Load and Flex_load? and ,PV? do we want the final result or the variation needed? ask Fabio
+if scenario == 5:
+    el_price_exp = el_price_BAL_fixed
+    el_price_imp = el_price_exp + 0.1
+if scenario == 6:
+    el_price_exp = el_price_DW
+    el_price_imp = el_price_UP
 #% Cost of Import/Export not considered ==> case = 0
-Mast_bal = ADMM_Master_bal(b1, c1, Pmin, Pmax, PV, b2, c2, Load, Flex_load, deltaPV, deltaLoad, tau, el_price_e, o, e, TMST, window, 0, asynch)
+Mast_bal = ADMM_Master_bal(Pmin_bal, Pmax_bal, Lmin_bal, Lmax_bal, y0_c_DA, mm_c_DA, y0_g_DA, mm_g_DA, deltaPV, deltaLoad, p_tilde, l_tilde, tau, el_price_exp, el_price_imp, o, e, TMST, window, 0, asynch)
 ADMM_bal_summary = Mast_bal.results
 ADMM_bal_prices = Mast_bal.prices
 ADMM_bal_flag = Mast_bal.flag

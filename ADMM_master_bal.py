@@ -19,7 +19,7 @@ class expando(object):
 
 
 class ADMM_Master_bal:
-    def __init__(self, b1, c1, Pmin, Pmax, PV, b2, c2, Load, Flex_load, deltaPV, deltaLoad, tau, el_price_e, o, e, time, window, case, threshold):
+    def __init__(self, Pmin, Pmax, Lmin, Lmax, y0_c_DA, mm_c_DA, y0_g_DA, mm_g_DA, deltaPV, deltaLoad, p_tilde, l_tilde, tau, el_price_exp, el_price_imp, o, e, time, window, case, threshold):
 
         self.data = expando()
         self.variables = expando()
@@ -27,24 +27,27 @@ class ADMM_Master_bal:
         self.results = expando()
         self.params = expando()
         
-        self.data.gen_lin_cost = b1
-        self.data.gen_quad_cost = c1
-        self.data.gen_lb = Pmin
-        self.data.gen_ub = Pmax
-        self.data.PV = PV
+        self.data.y0_g_DA = y0_g_DA
+        self.data.mm_g_DA = mm_g_DA
+        self.data.Pmin = Pmin #already shifted
+        self.data.Pmax = Pmax #already shifted
+        self.data.Lmin = Lmin #already shifted
+        self.data.Lmax = Lmax #already shifted
+        self.data.p_tilde = p_tilde
+        self.data.l_tilde = l_tilde
+        #self.data.PV = PV #this is a matrix of zeros
         self.data.deltaPV = deltaPV
         self.data.deltaLoad = deltaLoad
-        self.data.cons_lin_cost = b2
-        self.data.cons_quad_cost = c2
-        self.data.cons_ub = - Load
-        self.data.cons_lb = - (Load + 2*Flex_load)
-        self.data.goal = - (Load + Flex_load)
+        self.data.y0_c_DA = y0_c_DA
+        self.data.mm_c_DA = mm_c_DA
+        #self.data.goal = - (Load + Flex_load)
         self.data.tau = tau
-        self.data.el_price_e = el_price_e
+        self.data.el_price_exp = el_price_exp
+        self.data.el_price_imp = el_price_imp
         self.data.rho = o
         self.data.tol = e
         
-        self.params.num_pros = b2.shape[1]
+        self.params.num_pros = deltaPV.shape[1]
         self.case = case
         self.window = window
         self.params.time = time
@@ -92,8 +95,8 @@ class ADMM_Master_bal:
         q = self.variables.q_k[self.temp,:]
         alfa = self.variables.alfa_k[self.temp,:]
         beta = self.variables.beta_k[self.temp,:]
-        pr_exp = -self.data.el_price_e[self.temp]
-        pr_imp = self.data.el_price_e[self.temp] + 0.1# + self.data.tau
+        pr_exp = -self.data.el_price_exp[self.temp]
+        pr_imp = self.data.el_price_imp[self.temp] # + self.data.tau
         price_0 = self.variables.price_comm[self.temp]
         price_1 = self.variables.price_IE[self.temp,:]
         o = self.data.sigma

@@ -22,34 +22,27 @@ class ADMM_Pros_bal:
         
         self.MP = MP
         self.params.idx = idx
-        self.Pmin = self.MP.data.gen_lb[idx]   
-        self.Pmax = self.MP.data.gen_ub[idx]  
-        self.PV = self.MP.data.PV[:,idx] # forse questo non serve proprio
+        self.Pmin = self.MP.data.Pmin[idx]   
+        self.Pmax = self.MP.data.Pmax[idx] 
+        self.Lmin = self.MP.data.Lmin[idx]   
+        self.Lmax = self.MP.data.Lmax[idx] 
+        self.p_tilde = self.MP.data.p_tilde[idx]   
+        self.l_tilde = self.MP.data.l_tilde[idx] 
+#        self.PV = self.MP.data.PV[:,idx] # forse questo non serve proprio
         self.deltaPV = self.data.deltaPV
         self.deltaLoad = self.data.deltaLoad
-        self.goal = self.MP.data.goal[:,idx] 
-        b2 = self.MP.data.cons_lin_cost[:,idx]
-        c2 = self.MP.data.cons_quad_cost[:,idx]
-        b1 = self.MP.data.gen_lin_cost[:,idx]
-        c1 = self.MP.data.gen_quad_cost[:,idx]
-        self.Lmax = self.MP.data.cons_ub[:,idx]
-        self.Lmin = self.MP.data.cons_lb[:,idx]
+#        self.goal = self.MP.data.goal[:,idx] 
+        y0_c_DA = self.MP.data.y0_c_DA[:,idx]
+        y0_g_DA = self.MP.data.y0_g_DA[:,idx]
+        mm_c_DA = self.MP.data.mm_c_DA[:,idx]
+        mm_g_DA = self.MP.data.mm_g_DA[:,idx]
         
-        self.old_slope_load = self.MP.data.old_slope_load[idx]
+        
         # questa parte dovrebbe essere giusta
-        self.y0_c = 0.01 + b2 - c2*(self.l_tilde-(self.Lmax-self.Lmin)/2)*self.old_slope_load
-        self.mm_c = 2*c2/(self.Lmax-self.Lmin)
-        if sum(abs(self.mm_c[np.isinf(self.mm_c)]))>0:
-            self.y0_c[np.isinf(abs(self.mm_c))] = 0.01 + b2[np.isinf(abs(self.mm_c))]
-            self.mm_c[np.isinf(abs(self.mm_c))] = 0
-
-        self.y0_g = 0.01 + b1 - c1*(self.p_tilde-(self.Pmax-self.Pmin)/2)*2*c1/(self.Pmax-self.Pmin)
-        self.mm_g = 2*c1/(self.Pmax-self.Pmin)
-        if sum(abs(self.mm_g[np.isinf(self.mm_g)]))>0:
-            self.y0_g[np.isinf(abs(self.mm_g))] = 0.01 + b1[np.isinf(abs(self.mm_g))]
-            self.mm_g[np.isinf(abs(self.mm_g))] = 0
-        self.y0_g[np.isnan(self.y0_g)] = 0
-        self.mm_g[np.isnan(self.mm_g)] = 0
+        self.y0_c_bal = y0_c_DA + mm_c_DA*self.l_tilde
+        self.mm_c_bal = mm_c_DA
+        self.y0_g_bal = y0_g_DA + mm_g_DA*self.p_tilde
+        self.mm_g_bal = mm_g_DA
 
         self._build_model_()        
 
@@ -98,7 +91,7 @@ class ADMM_Pros_bal:
         m = self.model
         self.variables.load = np.array([m.addVar(lb=self.Lmin[self.t+k], ub=self.Lmax[self.t+k]) for k in range(24)])
         #check if u need the PV in the next one
-        self.variables.power = np.array([m.addVar(lb=self.Pmin+self.PV[self.t+k], ub=self.Pmax+self.PV[self.t+k]) for k in range(24)])
+        self.variables.power = np.array([m.addVar(lb=self.Pmin, ub=self.Pmax) for k in range(24)])
         self.variables.beta = np.array([m.addVar() for k in range(24)])
         self.variables.alfa = np.array([m.addVar() for k in range(24)])
         self.variables.q = np.array([m.addVar(-gb.GRB.INFINITY) for k in range(24)])
@@ -108,29 +101,29 @@ class ADMM_Pros_bal:
     def _build_constraint_(self,):
         m = self.model
         for k in range(24):
-            m.addConstr(self.variables.load[k] + self.variables.power[k] + self.variables.q[k] + self.variables.alfa[k] - self.variables.beta[k] == self.data.deltaPV[k] - self.data.deltaLoad[k], name="pow_bal[%s]"%k) 
+            m.addConstr(self.variables.load[k] + self.variables.power[k] + self.variables.q[k] + self.variables.alfa[k] - self.variables.beta[k] + self.data.deltaPV[k] - self.data.deltaLoad[k] == 0, name="pow_bal[%s]"%k) 
             m.addConstr(self.variables.q[k] <= self.variables.q_pos[k])
             m.addConstr(self.variables.q[k] >= -self.variables.q_pos[k])
 #        t = self.MP.temp[0]
 #        for j in np.arange(0,24,self.window):
 #            m.addConstr(sum(self.goal[range(t+j,t+j+self.window)] - self.variables.load[range(t+j,t+j+self.window)]) == 0)
-        m.addConstr(sum(self.goal[self.MP.temp] - self.variables.load) == 0)
+        #m.addConstr(sum(self.goal[self.MP.temp] - self.variables.load) == 0)
         m.update()
 
     def _build_objective_(self):
         m = self.model
         temp = self.MP.temp
-        y0_c = self.y0_c[temp]
-        mm_c = self.mm_c[temp]
-        y0_g = self.y0_g[temp]
-        mm_g = self.mm_g[temp]
+        y0_c_bal = self.y0_c_bal[temp]
+        mm_c_bal = self.mm_c_bal[temp]
+        y0_g_bal = self.y0_g_bal[temp]
+        mm_g_bal = self.mm_g_bal[temp]
         price0 = self.MP.variables.price_comm[temp]
         price1 = self.MP.variables.price_IE[temp,:]
         o = self.MP.data.sigma
         res0 = self.MP.variables.r_k[range(0,24)] + self.MP.weight*(self.variables.q - self.q_old)
         res1 = self.MP.variables.r_k[range(24,48)] + (self.variables.alfa - self.alfa_old)
         res2 = self.MP.variables.r_k[range(48,72)] + self.variables.beta - self.beta_old
-        self.objective = (sum(y0_c*(self.variables.load) + mm_c/2*(self.variables.load*self.variables.load) + y0_g*(self.variables.power) + mm_g/2*(self.variables.power*self.variables.power))
+        self.objective = (sum(y0_c_bal*(self.variables.load) + mm_c_bal/2*(self.variables.load*self.variables.load) + y0_g_bal*(self.variables.power) + mm_g_bal/2*(self.variables.power*self.variables.power))
                           + sum(0.001*self.variables.q_pos) + sum(price0*res0) + sum(price1[:,0]*res1+price1[:,1]*res2) + o/2*(sum(res0*res0)+sum(res1*res1+res2*res2))) #+ sum(0.1*self.variables.alfa + 0.05*self.variables.beta 
         m.setObjective(self.objective)
         m.update()
