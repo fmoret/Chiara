@@ -15,6 +15,7 @@ import shelve
 
 dd1 = os.getcwd() #os.path.realpath(__file__) #os.getcwd()
 data_path = str(Path(dd1).parent.parent)+r'\trunk\Input Data 2'
+data_path2 = str(Path(dd1).parent.parent)+r'\branches\balancing'
 
 filename=data_path+r'\input_data_2.out'
 file_loc=data_path+r'\el_prices.xlsx'
@@ -49,7 +50,7 @@ PostCode = d['PostCode']
 #os.chdir(dd1)
 n = b2.shape[1]
 g = b1.shape[1]
-TMST = 48#b2.shape[0]
+TMST = 8760#b2.shape[0]
 
 Lmin = - (Agg_load + Flex_load)
 Lmax = - Load #baseload
@@ -78,6 +79,7 @@ mm_g[np.isnan(mm_g)] = 0
 
 
 #%% Community CENTRALIZED solution
+TMST = 8760
 CT_p_sol = np.zeros((g,TMST))
 CT_l_sol = np.zeros((n,TMST))
 CT_q_sol = np.zeros((n,TMST))
@@ -177,35 +179,15 @@ CT_IE_sol = CT_imp_sol - CT_exp_sol
 
 
 #m = err
-limit_comply_consumption = (CT_l_sol.T<=Lmax[:48,:])&(CT_l_sol.T>=Lmin[:48,:])
-limit_comply_production = np.zeros([48,15])
-for p in range(15):
-    for t in range(48):
-        limit_comply_production[t,p] = (CT_p_sol.T[t,p]-PV[t,p]<=Pmax[p])&(CT_p_sol.T[t,p]-PV[t,p]>=Pmin[p])
-
-#the next one does'nt work
-price_comply = np.zeros([48,15])
-case = np.zeros([48,15])
-for p in range(15):
-    for t in range(48):
-        if (CT_price2_sol[0,t]>(b2[t,p] + c2[t,p]-0.01)):
-            price_comply[t,p] = (CT_l_sol.T[t,p]==Lmax[t,p])
-            case[t,p] = 1
-        elif (CT_price2_sol[0,t]<(b2[t,p] - c2[t,p]-0.01)):
-            price_comply[t,p] = (CT_l_sol.T[t,p]==Lmin[t,p])
-            case[t,p] = 2
-        else:
-            price_comply[t,p] = (CT_l_sol.T[t,p]>=Lmin[t,p])&(CT_l_sol.T[t,p]<=Lmax[t,p])
-            case[t,p] = 3
 
 cost_DA_tp = np.zeros([TMST,n]) 
 for t in range(TMST):
     for p in range(n):
         cost_DA_tp[t,p] = y0_c[t,p]*CT_l_sol[p,t] + mm_c[t,p]/2*CT_l_sol[p,t]*CT_l_sol[p,t] + y0_g[t,p]*CT_p_sol[p,t] + mm_g[t,p]/2*CT_p_sol[p,t]*CT_p_sol[p,t]+\
-                          CT_alfa_sol[p,t]*CT_imp_sol[t] + CT_beta_sol[p,t]*CT_exp_sol[t] + 0.001*abs(CT_q_sol[p,t])
+                          CT_alfa_sol[p,t]*CT_imp_sol[t] + CT_beta_sol[p,t]*CT_exp_sol[t] + (-CT_price2_sol[0,t])*(CT_q_sol[p,t])
         
-cost_DA_tp_rep = np.repeat(cost_DA_tp, 4, axis=0)
-cost_DA_p = np.sum(cost_DA_tp_rep, axis=0)
+cost_DA_tp_times4 = np.repeat(cost_DA_tp, 4, axis=0)
+cost_DA_p = np.sum(cost_DA_tp_times4, axis=0)
 cost_DA = np.sum(cost_DA_p)
 
 #%% ADMM optimisation CED via master-sub classes
@@ -272,7 +254,9 @@ PV = d['PV']
 Load = d['Load']
 Flex_load = d['Flex_load']
 
-TMST=48*4
+
+TMST=8760*4
+
 # data extension 1h --> 15 mins (repeat each row 4 times)
 b2_bal = np.repeat(b2, 4, axis=0)
 c2_bal = np.repeat(c2, 4, axis=0)
@@ -280,37 +264,48 @@ b1_bal = np.repeat(b1, 4, axis=0)
 c1_bal = np.repeat(c1, 4, axis=0)
 PV_old = PV
 PV_bal = np.repeat(PV, 4, axis=0)
+Load_old = Load
 Load_bal = np.repeat(Load, 4, axis=0)
 Flex_load_bal = np.repeat(Flex_load, 4, axis=0)
 
 
 # create noise for PV (only if PV nonzero) 
-noise_PV_bal = np.random.normal(0,0.1,(PV_bal.shape))
-for row in range(noise_PV_bal.shape[0]):
-    for col in range(noise_PV_bal.shape[1]):
-        if PV_bal[row,col] == 0:
-            noise_PV_bal[row,col] = 0
+noise_PV_DA_dataframe = pd.read_csv(data_path2+r'\noise_PV_DA.csv', header=None)
+noise_PV_DA = noise_PV_DA_dataframe.values
+
+
+for row in range(noise_PV_DA.shape[0]):
+    for col in range(noise_PV_DA.shape[1]):
+        if PV_old[row,col] == 0:
+            noise_PV_DA[row,col] = 0
             
 # adding noise to PV (and if the result is less than zero bring it to zero)
-PV_real = PV_bal + noise_PV_bal
-for row in range(PV_real.shape[0]):
-    for col in range(PV_real.shape[1]):
-        if PV_real[row,col] < 0:
-            PV_real[row,col] = 0
+PV_real_DA = PV_old + noise_PV_DA
+for row in range(PV_real_DA.shape[0]):
+    for col in range(PV_real_DA.shape[1]):
+        if PV_real_DA[row,col] < 0:
+            PV_real_DA[row,col] = 0
+PV_real_bal = np.repeat(PV_real_DA, 4, axis=0)
+
+
 
 # create noise for Load
-noise_Load_bal = np.random.normal(0,0.1,(Load_bal.shape))
+noise_Load_DA_dataframe = pd.read_csv(data_path2+r'\noise_Load_DA.csv', header=None)
+noise_Load_DA = noise_Load_DA_dataframe.values
 
 # adding noise to Load (and if the result is less than zero bring it to zero)
-Load_real = Load_bal + noise_Load_bal
-for row in range(Load_real.shape[0]):
-    for col in range(Load_real.shape[1]):
-        if Load_real[row,col] < 0:
-            Load_real[row,col] = 0
-            
+Load_real_DA = Load_old + noise_Load_DA
+for row in range(Load_real_DA.shape[0]):
+    for col in range(Load_real_DA.shape[1]):
+        if Load_real_DA[row,col] < 0:
+            Load_real_DA[row,col] = 0
+Load_real_bal = np.repeat(Load_real_DA, 4, axis=0)
+
 # IMBALANCES
-deltaPV = PV_real - PV_bal
-deltaLoad = Load_real - Load_bal
+deltaPV = PV_real_bal - PV_bal
+deltaPV_DA = deltaPV[1::4]
+deltaLoad = Load_real_bal - Load_bal
+deltaLoad_DA = deltaPV[1::4]
 deltaPV_prosumer = np.empty([n])
 deltaLoad_prosumer = np.empty([n])
 deltaPV_community = np.empty([TMST])
@@ -330,17 +325,9 @@ average_imbal_community = np.average(imbalance_community)
 #deltaPV_exp = deltaPV.sum()/(n*TMST)
 #deltaLoad_exp = deltaLoad.sum()/(n*TMST)
 
-
 # aggregated load before and after imbalance            
 #Agg_load = Load + Flex_load
 #Agg_load_real = Load_real + Flex_load
-
-# other stuff - including: How many days to RUN
-PostCode = d['PostCode']
-os.chdir(dd1)
-n = b2_bal.shape[1]
-g = b1_bal.shape[1]
-TMST = 48*4#b2.shape[0] # *4 because now we have 15 mins time intervals
 
 # retrieving and extending (1h --> 15min) set points and DA price from DA stage
 #p_tilde = np.repeat(p_1, 4, axis=0)
@@ -441,156 +428,6 @@ mm_g_bal = mm_g_DA
 tau = 0.1
 window = 4
 
-#%% SOME PICTURES
-
-#PV imbalance - prosumer 0
-fig_PV = plt.figure(11,figsize=[10,6])
-ax1, = plt.plot(PV[:192,0],label='PV forecast')
-ax2, = plt.plot(PV_real[:192,0],label='PV realization')
-plt.legend([ax1, ax2], ['PV forecast', 'PV realization'])
-plt.xlabel('time [15 mins intervals]')
-plt.ylabel('PV production [kWh]')
-plt.title('PV production prosumer #0')
-#load imbalance - prosumer 1
-fig_load = plt.figure(11,figsize=[10,6])
-ax1, = plt.plot(Load[:192,1],label='Load forecast')
-ax2, = plt.plot(Load_real[:192,1],label='Load realization')
-plt.legend([ax1, ax2], ['Load forecast', 'Load realization'])
-plt.xlabel('time [15 mins intervals]')
-plt.ylabel('Load comsumption [kWh]')
-plt.title('Load consumption prosumer #1')
-#load imbalance  and minmax limits - prosumer 1
-fig_load_minmax = plt.figure(11,figsize=[10,6])
-ax1, = plt.plot(-Load[:192,1],label='Load forecast',marker='o',linestyle='dashed')
-ax2, = plt.plot(-Load_real[:192,1],label='Load realization',linestyle='dashed')
-ax3, = plt.plot(Lmin_DA[:192,1],label='Lmin')
-ax4, = plt.plot(Lmax_DA[:192,1],label='Lmax')
-ax5, = plt.plot(l_tilde[:192,1],label='consumption set point',linestyle='dashed')
-plt.legend([ax1, ax2,ax3,ax4,ax5], ['Load forecast', 'Load realization','Lmin','Lmax','consumption set point'])
-plt.xlabel('time [15 mins intervals]')
-plt.ylabel('Load comsumption [kWh]')
-plt.title('Load consumption prosumer #1')
-
-#%% Community CENTRALIZED solution with reserve
-#n = 15
-#TMST = 48
-#RES_UP = imbalance_community[0::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
-#RES_DW = RES_UP
-#Agg_load_res = Agg_load[0::4]
-#CR_UP = 0.005*np.ones([TMST,2*n])
-#CR_DW = 0.005*np.ones([TMST,2*n])
-#pi_res_UP = 0.05
-#pi_res_DW = 0.05
-#
-#CT_p_sol = np.zeros((n,TMST))
-#CT_l_sol = np.zeros((n,TMST))
-#CT_q_sol = np.zeros((n,TMST))
-#CT_r_UP_sol = np.zeros((2*n,TMST))
-#CT_r_DW_sol = np.zeros((2*n,TMST))
-#CT_R_UP_sol = np.zeros((2*n,TMST))
-#CT_R_DW_sol = np.zeros((2*n,TMST))
-#CT_alfa_sol = np.zeros((n,TMST))
-#CT_beta_sol = np.zeros((n,TMST))
-#CT_imp_sol = np.zeros(TMST)
-#CT_exp_sol = np.zeros(TMST)
-#CT_obj_sol = np.zeros(TMST)
-#CT_price_sol = np.zeros((n,TMST))
-#CT_price2_sol = np.zeros((3,TMST))
-#
-#for t in np.arange(0,TMST,24):  # for t = 0, 24
-#    temp = range(t,t+24)
-#    # Create a new model
-#    CT_m = gb.Model("qp")
-#    #CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
-#    # Create variables
-#    p = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-#    l = np.array([CT_m.addVar(lb=-gb.GRB.INFINITY, ub=0) for i in range(n) for k in range(24)])
-#    r_UP = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
-#    r_DW = np.array([CT_m.addVar(lb=-gb.GRB.INFINITY, ub=0) for i in range(2*n) for k in range(24)])
-#    R_UP = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
-#    R_DW = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
-#    q_imp = np.array([CT_m.addVar() for k in range(24)])
-#    q_exp = np.array([CT_m.addVar() for k in range(24)])
-#    alfa = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-#    beta = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-#    q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-#    q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(24)]) 
-#    gamma_i = (el_price_e[temp] + 0.1)
-#    gamma_e = -el_price_e[temp]
-#    CT_m.update()
-#    
-#    p = np.transpose(p.reshape(n,24))
-#    l = np.transpose(l.reshape(n,24))
-#    q = np.transpose(q.reshape(n,24))
-#    q_pos = np.transpose(q_pos.reshape(n,24))
-#    alfa = np.transpose(alfa.reshape(n,24))
-#    beta = np.transpose(beta.reshape(n,24))
-#    r_UP = np.transpose(r_UP.reshape(2*n,24)) 
-#    r_DW = np.transpose(r_DW.reshape(2*n,24))
-#    R_UP = np.transpose(R_UP.reshape(2*n,24))
-#    R_DW = np.transpose(R_DW.reshape(2*n,24))
-#    
-#    
-#    # Set objective: 
-#    obj = (sum(sum(y0_c[temp,:]*l + mm_c[temp,:]/2*l*l) + sum(y0_g[temp,:]*p + mm_g[temp,:]/2*p*p)) +\
-#           sum(gamma_i*q_imp + gamma_e*q_exp) + sum(0.001*sum(q_pos))) +\
-#           sum(sum(CR_UP[temp,:]*R_UP) + sum(CR_DW[temp,:]*R_DW)) +\
-#           pi_res_UP*(sum(-sum(y0_c[temp,:]*r_UP[:,n:] + mm_c[temp,:]/2*r_UP[:,n:]*r_UP[:,n:]) + sum(y0_g[temp,:]*r_UP[:,:n] + mm_g[temp,:]/2*r_UP[:,:n]*r_UP[:,:n]))) +\
-#           pi_res_DW*(sum(-sum(y0_c[temp,:]*r_DW[:,n:] + mm_c[temp,:]/2*r_DW[:,n:]*r_DW[:,n:]) + sum(y0_g[temp,:]*r_DW[:,:n] + mm_g[temp,:]/2*r_DW[:,:n]*r_DW[:,:n])))
-#    CT_m.setObjective(obj)
-#    
-#    # Add constraint
-#    for k in range(24):
-#        for i in range(n):
-#            CT_m.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] == 0, name="pros[%s,%s]"% (k,i))
-#            CT_m.addConstr(q[k,i] <= q_pos[k,i])
-#            CT_m.addConstr(q[k,i] >= -q_pos[k,i])
-#            CT_m.addConstr(p[k,i] - PV_old[k,i] + R_UP[k,i] <= Pmax[i], name="R_UP_limit_p[%s,%s]"% (k,i))
-#            CT_m.addConstr(p[k,i] - PV_old[k,i] - R_DW[k,i] >= Pmin[i], name="R_DW_limit_p[%s,%s]"% (k,i))
-#            CT_m.addConstr(l[k,i] + R_UP[k,i+n] <= Lmax[k,i], name="R_UP_limit_l[%s,%s]"% (k,i))
-#            CT_m.addConstr(l[k,i] - R_DW[k,i+n] >= Lmin[k,i], name="R_DW_limit_l[%s,%s]"% (k,i))
-#        for i in range(2*n):
-#            CT_m.addConstr(r_UP[k,i] - R_UP[k,i]<= 0, name="r_UP_limit[%s,%s]"% (k,i))
-#            CT_m.addConstr(-r_DW[k,i] - R_DW[k,i]<= 0, name="r_DW_limit[%s,%s]"% (k,i))
-#        CT_m.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k))
-#        CT_m.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
-#        CT_m.addConstr(sum(beta[k,:]) - q_exp[k] == 0, name="exp_bal[%s]"%(k))
-#        CT_m.addConstr(sum(r_UP[k,:]) - RES_UP[k] == 0, name="r_UP_requirement[%s]"%(k))
-#        CT_m.addConstr(-sum(r_DW[k,:]) - RES_DW[k] == 0, name="r_DW_requirement[%s]"%(k))
-#        
-#    for i in range(n): #nell'arco di tutto il giorno i conti sul carico devono tornare 
-#    #per ogni prosumer, ma l'ottimizzazione è fatta ora per ora
-#        CT_m.addConstr(sum(Agg_load_res[temp,i] + l[:,i]) == 0)
-##        for j in np.arange(0,24,window):
-##            CT_m.addConstr(sum(Agg_load[range(t+j,t+j+window),i] + l[range(j,j+window),i]) == 0)
-#    CT_m.update()    
-#        
-#    CT_m.optimize()
-#    for k in range(24):
-#        for i in range(n):
-#            CT_price_sol[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
-#            CT_p_sol[i,t+k] = p[k,i].x
-#            CT_l_sol[i,t+k] = l[k,i].x
-#            CT_q_sol[i,t+k] = q[k,i].x
-#            CT_alfa_sol[i,t+k] = alfa[k,i].x
-#            CT_beta_sol[i,t+k] = beta[k,i].x
-#        for i in range(2*n):
-#            CT_r_UP_sol[i,t+k] = r_UP[k,i].x
-#            CT_r_DW_sol[i,t+k] = r_DW[k,i].x
-#            CT_R_UP_sol[i,t+k] = R_UP[k,i].x
-#            CT_R_DW_sol[i,t+k] = R_DW[k,i].x
-#        CT_price2_sol[0,t+k] = CT_m.getConstrByName("comm[%s]"%k).Pi
-#        CT_price2_sol[1,t+k] = CT_m.getConstrByName("imp_bal[%s]"%k).Pi
-#        CT_price2_sol[2,t+k] = CT_m.getConstrByName("exp_bal[%s]"%k).Pi
-#        CT_imp_sol[t+k] = q_imp[k].x
-#        CT_exp_sol[t+k] = q_exp[k].x
-## http://www.gurobi.com/documentation/7.5/refman/attributes.html
-#    del CT_m
-#
-#CT_IE_sol = CT_imp_sol - CT_exp_sol
-            
-#%% SCENARIOS
-
 # prices
 el_price_DA = np.repeat(el_price_e, 4, axis=0)
 el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0) # 2 rows
@@ -600,11 +437,11 @@ el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0) # 2 rows
 
 system_state = np.empty([TMST])
 for t in range(TMST):
-    if el_price_DA[t] == el_price_DW[t]:
+    if el_price_DA[t] == el_price_DW[t]: #up-regulation
         system_state[t] = 1
-    elif el_price_DA[t] == el_price_UP[t]:
+    elif el_price_DA[t] == el_price_UP[t]: #dw-regulation
         system_state[t] = 2
-    elif el_price_DW[t] == el_price_UP[t]:
+    elif el_price_DW[t] == el_price_UP[t]: #balance
         system_state = 0
 #system_state = np.random.randint(3, size=len(el_price_DA)) # where 0 is balanced, 1 is UP and 2 is DW regulation.
 
@@ -617,89 +454,538 @@ for t in range(TMST):
     elif system_state[t] == 2:
         el_price_BAL[t] = el_price_DW[t]
     
-ret_price_exp = np.average(el_price_BAL)
-ret_price_imp = ret_price_exp + 0.1
-el_price_BAL_fixed = np.average(el_price_BAL)*np.ones(TMST)
+#ret_price_exp = np.average(el_price_BAL)
+#ret_price_imp = ret_price_exp + 0.1
+ret_price_exp = np.average(el_price_DW)
+ret_price_imp = np.average(el_price_UP)
+#el_price_BAL_fixed = np.average(el_price_BAL)*np.ones(TMST)
+
+#%% Community CENTRALIZED solution - perfect information
+
+Agg_load_real_DA = Load_real_DA + Flex_load
+Lmin_PI = - (Agg_load_real_DA + Flex_load)
+Lmax_PI = - Load_real_DA
+
+# consumers UTILITY FUNCTION
+y0_c_PI = 0.01 + b2 - c2*(Lmax_PI+Lmin_PI)/(Lmax_PI-Lmin_PI)
+mm_c_PI = 2*c2/(Lmax_PI-Lmin_PI)
+if sum(abs(mm_c_PI[np.isinf(mm_c_PI)]))>0:    # se trova degli inf
+    #coefficiente angolare
+    y0_c_PI[np.isinf(abs(mm_c_PI))] = 0.01 + b2[np.isinf(abs(mm_c_PI))]  # porta questo a 0.01 + b2
+    #intercetta
+    mm_c_PI[np.isinf(abs(mm_c_PI))] = 0  
+    
+TMST = 8760
+
+CT_p_sol_PI = np.zeros((g,TMST))
+CT_l_sol_PI = np.zeros((n,TMST))
+CT_q_sol_PI = np.zeros((n,TMST))
+CT_alfa_sol_PI = np.zeros((n,TMST))
+CT_beta_sol_PI = np.zeros((n,TMST))
+CT_imp_sol_PI = np.zeros(TMST)
+CT_exp_sol_PI = np.zeros(TMST)
+CT_obj_sol_PI = np.zeros(TMST)
+CT_price_sol_PI = np.zeros((n,TMST))
+CT_price2_sol_PI = np.zeros((3,TMST))
+
+for t in np.arange(0,TMST,24):  # for t = 0, 24
+    temp = range(t,t+24)
+    # Create a new model
+    CT_m = gb.Model("qp")
+    CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
+    # Create variables
+    p = np.array([CT_m.addVar(lb=Pmin[i]+PV_real_DA[t+k,i], ub=Pmax[i]+PV_real_DA[t+k,i]) for i in range(n) for k in range(24)])
+    l = np.array([CT_m.addVar(lb=Lmin_PI[t+k,i], ub=Lmax_PI[t+k,i]) for i in range(n) for k in range(24)])
+    q_imp = np.array([CT_m.addVar() for k in range(24)])
+    q_exp = np.array([CT_m.addVar() for k in range(24)])
+    alfa = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+    beta = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+    q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+    q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(24)]) 
+    gamma_i = (el_price_e[temp] + 0.1)
+    gamma_e = -el_price_e[temp]
+    CT_m.update()
+    
+    p = np.transpose(p.reshape(n,24))
+    l = np.transpose(l.reshape(n,24))
+    q = np.transpose(q.reshape(n,24))
+    q_pos = np.transpose(q_pos.reshape(n,24))
+    alfa = np.transpose(alfa.reshape(n,24))
+    beta = np.transpose(beta.reshape(n,24))
+    
+    # Set objective: 
+    obj = (sum(sum(y0_c_PI[temp,:]*l + mm_c_PI[temp,:]/2*l*l) + sum(y0_g[temp,:]*p + mm_g[temp,:]/2*p*p)) 
+           + sum(gamma_i*q_imp + gamma_e*q_exp) + sum(0.001*sum(q_pos)))
+    # doppia sommatoria: 
+    # la somma interna è sulle colonne, quindi da 15x24 si passa a 24
+    # quindi somma sui prosumer
+    # la somma esterna somma tutti gli elementi dell'array
+    # quindi somma sulle 24 ore --> un giorno
+    # discorso simile per le altre sommatorie
+    # l'objective è minimizzare il totale di un giorno
+
+    CT_m.setObjective(obj)
+    
+    # Add constraint
+    for k in range(24):
+        CT_m.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k)) #somma sui prosumer
+        #what about mettere una variabile invece che 0? da minimizzare poi nell'obj
+        for i in range(n): #balance per ogni prosumer, ogni ora
+            CT_m.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] == 0, name="pros[%s,%s]"% (k,i))
+            CT_m.addConstr(q[k,i] <= q_pos[k,i]) #limite sulla q, che può essere pos o neg
+            CT_m.addConstr(q[k,i] >= -q_pos[k,i])
+        CT_m.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
+        CT_m.addConstr(sum(beta[k,:]) - q_exp[k] == 0, name="exp_bal[%s]"%(k))
+    for i in range(n): #nell'arco di tutto il giorno i conti sul carico devono tornare 
+    #per ogni prosumer, ma l'ottimizzazione è fatta ora per ora
+        CT_m.addConstr(sum(Agg_load_real_DA[temp,i] + l[:,i]) == 0)
+#        for j in np.arange(0,24,window):
+#            CT_m.addConstr(sum(Agg_load[range(t+j,t+j+window),i] + l[range(j,j+window),i]) == 0)
+    CT_m.update()    
+        
+    CT_m.optimize()
+    for k in range(24):
+        for i in range(n):
+            CT_price_sol_PI[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
+            CT_p_sol_PI[i,t+k] = p[k,i].x
+            CT_l_sol_PI[i,t+k] = l[k,i].x
+            CT_q_sol_PI[i,t+k] = q[k,i].x
+            CT_alfa_sol_PI[i,t+k] = alfa[k,i].x
+            CT_beta_sol_PI[i,t+k] = beta[k,i].x
+        CT_price2_sol_PI[0,t+k] = CT_m.getConstrByName("comm[%s]"%k).Pi
+        CT_price2_sol_PI[1,t+k] = CT_m.getConstrByName("imp_bal[%s]"%k).Pi
+        CT_price2_sol_PI[2,t+k] = CT_m.getConstrByName("exp_bal[%s]"%k).Pi
+        CT_imp_sol_PI[t+k] = q_imp[k].x
+        CT_exp_sol_PI[t+k] = q_exp[k].x
+# http://www.gurobi.com/documentation/7.5/refman/attributes.html
+    del CT_m
+
+CT_IE_sol_PI = CT_imp_sol_PI - CT_exp_sol_PI
+
+cost_DA_PI1_tp = np.zeros([TMST,n]) 
+for t in range(TMST):
+    for p in range(n):
+        cost_DA_PI1_tp[t,p] = y0_c_PI[t,p]*CT_l_sol_PI[p,t] + mm_c_PI[t,p]/2*CT_l_sol_PI[p,t]*CT_l_sol_PI[p,t] + y0_g[t,p]*CT_p_sol_PI[p,t] + mm_g[t,p]/2*CT_p_sol_PI[p,t]*CT_p_sol_PI[p,t]+\
+                          CT_alfa_sol_PI[p,t]*CT_imp_sol_PI[t] + CT_beta_sol_PI[p,t]*CT_exp_sol_PI[t] + (-CT_price2_sol_PI[0,t])*CT_q_sol_PI[p,t]
+
+
+cost_DA_PI2_tp = np.zeros([TMST,n]) 
+for t in range(TMST):
+    for p in range(n):
+        cost_DA_PI2_tp[t,p] = cost_DA_tp[t,p] + (deltaPV_DA[t,p] - deltaLoad_DA[t,p])*CT_price2_sol[0,t]
+
+cost_DA_PI1_tp_times4 = np.repeat(cost_DA_PI1_tp, 4, axis=0)
+cost_DA_PI1_p = np.sum(cost_DA_PI1_tp_times4, axis=0)
+cost_DA_PI1 = np.sum(cost_DA_PI1_p)
+
+cost_DA_PI2_tp_times4 = np.repeat(cost_DA_PI2_tp, 4, axis=0)
+cost_DA_PI2_p = np.sum(cost_DA_PI2_tp_times4, axis=0)
+cost_DA_PI2= np.sum(cost_DA_PI2_p)
+
+diff_PI12 = (cost_DA_PI1 - cost_DA_PI2)/cost_DA_PI2
+##crea immagini
+#for k in range(3):
+#    prosumers = ['pros%k']
+#    style = ['r','g','y',]
+#    plt.plot(range(48), CT_p_sol[k,:] )
+#    legend()
+#
+#d={}
+#a=np.empty(9)
+#for x in range(1,10):
+#       a[x]=d["string{0}".format(x)]
+#%% SOME PICTURES
+
+##PV imbalance - prosumer 0
+#fig_PV = plt.figure(11,figsize=[10,6])
+#ax1, = plt.plot(PV[:192,0],label='PV forecast')
+#ax2, = plt.plot(PV_real[:192,0],label='PV realization')
+#plt.legend([ax1, ax2], ['PV forecast', 'PV realization'])
+#plt.xlabel('time [15 mins intervals]')
+#plt.ylabel('PV production [kWh]')
+#plt.title('PV production prosumer #0')
+##load imbalance - prosumer 1
+#fig_load = plt.figure(11,figsize=[10,6])
+#ax1, = plt.plot(Load[:192,1],label='Load forecast')
+#ax2, = plt.plot(Load_real[:192,1],label='Load realization')
+#plt.legend([ax1, ax2], ['Load forecast', 'Load realization'])
+#plt.xlabel('time [15 mins intervals]')
+#plt.ylabel('Load comsumption [kWh]')
+#plt.title('Load consumption prosumer #1')
+##load imbalance  and minmax limits - prosumer 1
+#fig_load_minmax = plt.figure(11,figsize=[10,6])
+#ax1, = plt.plot(-Load[:192,1],label='Load forecast',marker='o',linestyle='dashed')
+#ax2, = plt.plot(-Load_real[:192,1],label='Load realization',linestyle='dashed')
+#ax3, = plt.plot(Lmin_DA[:192,1],label='Lmin')
+#ax4, = plt.plot(Lmax_DA[:192,1],label='Lmax')
+#ax5, = plt.plot(l_tilde[:192,1],label='consumption set point',linestyle='dashed')
+#plt.legend([ax1, ax2,ax3,ax4,ax5], ['Load forecast', 'Load realization','Lmin','Lmax','consumption set point'])
+#plt.xlabel('time [15 mins intervals]')
+#plt.ylabel('Load comsumption [kWh]')
+#plt.title('Load consumption prosumer #1')
+
+#%% Community CENTRALIZED solution with reserve POP-OUT
+n = 15
+TMST = 48
+
+# prices
+delta_lambda_UP = np.average(el_price_UP) - np.average(el_price_e)
+delta_lambda_DW = np.average(el_price_DW) - np.average(el_price_e)
+lambda_UP = (el_price_e + 0.1) + delta_lambda_UP*np.ones(len(el_price_e))
+lambda_DW = (el_price_e) + delta_lambda_DW*np.ones(len(el_price_e))
+
+# allocate variables
+CT_p_sol_resP = np.zeros((n,TMST))
+CT_l_sol_resP = np.zeros((n,TMST))
+CT_q_sol_resP = np.zeros((n,TMST))
+CT_R_UP_sol_resP = np.zeros(TMST)
+CT_R_DW_sol_resP = np.zeros(TMST)
+CT_r_p_UP_sol_resP = np.zeros((n,TMST))
+CT_r_p_DW_sol_resP = np.zeros((n,TMST))
+CT_r_l_UP_sol_resP = np.zeros((n,TMST))
+#CT_r_l_DW_sol_resP = np.zeros((n,TMST))
+CT_alfa_sol_resP = np.zeros((n,TMST))
+CT_beta_sol_resP = np.zeros((n,TMST))
+CT_imp_sol_resP = np.zeros(TMST)
+CT_exp_sol_resP = np.zeros(TMST)
+CT_obj_sol_resP = np.zeros(TMST)
+CT_price_sol_resP = np.zeros((n,TMST))
+CT_price2_sol_resP = np.zeros((3,TMST))
+
+for t in np.arange(0,TMST,24):  # for t = 0, 24
+    temp = range(t,t+24)
+    # Create a new model
+    CT_m_resP = gb.Model("qp")
+    #CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
+    # Create variables
+    p = np.array([CT_m_resP.addVar() for i in range(n) for k in range(24)])
+    l = np.array([CT_m_resP.addVar(lb=-gb.GRB.INFINITY, ub=0) for i in range(n) for k in range(24)])
+    r_p_UP = np.array([CT_m_resP.addVar() for i in range(n) for k in range(24)])
+    r_p_DW = np.array([CT_m_resP.addVar() for i in range(n) for k in range(24)])
+    r_l_UP = np.array([CT_m_resP.addVar() for i in range(n) for k in range(24)])
+#    r_l_DW = np.array([CT_m_resP.addVar() for i in range(n) for k in range(24)])
+    R_UP = np.array([CT_m_resP.addVar() for k in range(24)])
+    R_DW = np.array([CT_m_resP.addVar() for k in range(24)])
+    q_imp = np.array([CT_m_resP.addVar() for k in range(24)])
+    q_exp = np.array([CT_m_resP.addVar() for k in range(24)])
+    alfa = np.array([CT_m_resP.addVar() for i in range(n) for k in range(24)])
+    beta = np.array([CT_m_resP.addVar() for i in range(n) for k in range(24)])
+    q_pos = np.array([CT_m_resP.addVar() for i in range(n) for k in range(24)])
+    q = np.array([CT_m_resP.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(24)]) 
+    gamma_res_i = lambda_UP[temp]
+    gamma_res_e = lambda_DW[temp]
+    gamma_i = (el_price_e[temp] + 0.1)
+    gamma_e = -el_price_e[temp]
+    CT_m_resP.update()
+    
+    p = np.transpose(p.reshape(n,24))
+    l = np.transpose(l.reshape(n,24))
+    q = np.transpose(q.reshape(n,24))
+    r_p_UP = np.transpose(r_p_UP.reshape(n,24))
+    r_p_DW = np.transpose(r_p_DW.reshape(n,24))
+    r_l_UP = np.transpose(r_l_UP.reshape(n,24))
+#    r_l_DW = np.transpose(r_l_DW.reshape(n,24))
+    q_pos = np.transpose(q_pos.reshape(n,24))
+    alfa = np.transpose(alfa.reshape(n,24))
+    beta = np.transpose(beta.reshape(n,24))
+    
+    
+    # Set objective: 
+    obj = (sum(sum(y0_c[temp,:]*(l+r_l_UP) + mm_c[temp,:]/2*(l+r_l_UP)*(l+r_l_UP)) +\
+              sum(y0_g[temp,:]*(p+r_p_UP-r_p_DW) + mm_g[temp,:]/2*(p+r_p_UP-r_p_DW)*(p+r_p_UP-r_p_DW)) +\
+              sum(gamma_i*q_imp + gamma_e*q_exp) +\
+              sum(0.001*sum(q_pos)) +\
+              -sum(gamma_res_i*R_UP + gamma_res_e*R_DW)))
+    CT_m_resP.setObjective(obj)
+    
+    # Add constraint
+    for k in range(24):
+        for i in range(n):
+            CT_m_resP.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] == 0, name="pros[%s,%s]"% (k,i))
+            CT_m_resP.addConstr(q[k,i] <= q_pos[k,i])
+            CT_m_resP.addConstr(q[k,i] >= -q_pos[k,i])
+            CT_m_resP.addConstr(p[k,i] - PV_old[k,i] + r_p_UP[k,i] <= Pmax[i], name="R_UP_limit_p[%s,%s]"% (k,i))
+            CT_m_resP.addConstr(p[k,i] - PV_old[k,i] - r_p_DW[k,i] >= Pmin[i], name="R_DW_limit_p[%s,%s]"% (k,i))
+            CT_m_resP.addConstr(l[k,i] + r_l_UP[k,i] <= Lmax[k,i], name="R_UP_limit_l[%s,%s]"% (k,i))
+#            CT_m_resP.addConstr(l[k,i] - r_l_DW[k,i] >= Lmin[k,i], name="R_DW_limit_l[%s,%s]"% (k,i))
+        CT_m_resP.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k))
+        CT_m_resP.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
+        CT_m_resP.addConstr(sum(beta[k,:]) - q_exp[k] == 0, name="exp_bal[%s]"%(k))
+        CT_m_resP.addConstr(sum(r_p_UP[k,:] + r_l_UP[k,:]) - R_UP[k] == 0, name="r_UP_requirement[%s]"%(k))
+#        CT_m_resP.addConstr(sum(r_p_DW[k,:] + r_l_DW[k,:]) - R_DW[k] == 0, name="r_DW_requirement[%s]"%(k))
+        
+    for i in range(n): #nell'arco di tutto il giorno i conti sul carico devono tornare 
+    #per ogni prosumer, ma l'ottimizzazione è fatta ora per ora
+        CT_m_resP.addConstr(sum(Agg_load[temp,i] + l[:,i]) == 0)
+#        for j in np.arange(0,24,window):
+#            CT_m.addConstr(sum(Agg_load[range(t+j,t+j+window),i] + l[range(j,j+window),i]) == 0)
+    CT_m_resP.update()    
+        
+    CT_m_resP.optimize()
+    for k in range(24):
+        for i in range(n):
+            CT_price_sol_resP[i,t+k] = CT_m_resP.getConstrByName("pros[%s,%s]"%(k,i)).Pi
+            CT_p_sol_resP[i,t+k] = p[k,i].x
+            CT_l_sol_resP[i,t+k] = l[k,i].x
+            CT_q_sol_resP[i,t+k] = q[k,i].x
+            CT_alfa_sol_resP[i,t+k] = alfa[k,i].x
+            CT_beta_sol_resP[i,t+k] = beta[k,i].x
+            CT_r_p_UP_sol_resP[i,t+k] = r_p_UP[k,i].x
+            CT_r_p_DW_sol_resP[i,t+k] = r_p_DW[k,i].x
+            CT_r_l_UP_sol_resP[i,t+k] = r_l_UP[k,i].x
+#            CT_r_l_DW_sol_resP[i,t+k] = r_p_DW[k,i].x
+        CT_R_UP_sol_resP[t+k] = R_UP[k].x
+        CT_R_DW_sol_resP[t+k] = R_DW[k].x    
+        CT_price2_sol_resP[0,t+k] = CT_m_resP.getConstrByName("comm[%s]"%k).Pi
+        CT_price2_sol_resP[1,t+k] = CT_m_resP.getConstrByName("imp_bal[%s]"%k).Pi
+        CT_price2_sol_resP[2,t+k] = CT_m_resP.getConstrByName("exp_bal[%s]"%k).Pi
+        CT_imp_sol_resP[t+k] = q_imp[k].x
+        CT_exp_sol_resP[t+k] = q_exp[k].x
+# http://www.gurobi.com/documentation/7.5/refman/attributes.html
+    del CT_m_resP
+
+CT_IE_sol_resP = CT_imp_sol - CT_exp_sol
+            
+#%% Community CENTRALIZED solution with reserve
+n = 15
+TMST = 48
+RES_UP = 0.1*np.ones(len(imbalance_community))
+#RES_UP = imbalance_community[0::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
+RES_DW = RES_UP
+CR_UP = 0.005*np.ones([TMST,2*n])
+CR_DW = 0.005*np.ones([TMST,2*n])
+pi_res_UP = 0.05
+pi_res_DW = 0.05
+
+CT_p_sol_res = np.zeros((n,TMST))
+CT_l_sol_res = np.zeros((n,TMST))
+CT_q_sol_res = np.zeros((n,TMST))
+CT_r_UP_sol_res = np.zeros((2*n,TMST))
+CT_r_DW_sol_res = np.zeros((2*n,TMST))
+CT_R_UP_sol_res = np.zeros((2*n,TMST))
+CT_R_DW_sol_res = np.zeros((2*n,TMST))
+CT_alfa_sol_res = np.zeros((n,TMST))
+CT_beta_sol_res = np.zeros((n,TMST))
+CT_imp_sol_res = np.zeros(TMST)
+CT_exp_sol_res = np.zeros(TMST)
+CT_obj_sol_res = np.zeros(TMST)
+CT_price_sol_res = np.zeros((n,TMST))
+CT_price2_sol_res = np.zeros((3,TMST))
+
+for t in np.arange(0,TMST,24):  # for t = 0, 24
+    temp = range(t,t+24)
+    # Create a new model
+    CT_m = gb.Model("qp")
+    #CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
+    # Create variables
+    p = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+    l = np.array([CT_m.addVar(lb=-gb.GRB.INFINITY, ub=0) for i in range(n) for k in range(24)])
+    r_UP = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
+    r_DW = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
+    R_UP = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
+    R_DW = np.array([CT_m.addVar() for i in range(2*n) for k in range(24)])
+    q_imp = np.array([CT_m.addVar() for k in range(24)])
+    q_exp = np.array([CT_m.addVar() for k in range(24)])
+    alfa = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+    beta = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+    q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
+    q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(24)]) 
+    gamma_i = (el_price_e[temp] + 0.1)
+    gamma_e = -el_price_e[temp]
+    CT_m.update()
+    
+    p = np.transpose(p.reshape(n,24))
+    l = np.transpose(l.reshape(n,24))
+    q = np.transpose(q.reshape(n,24))
+    q_pos = np.transpose(q_pos.reshape(n,24))
+    alfa = np.transpose(alfa.reshape(n,24))
+    beta = np.transpose(beta.reshape(n,24))
+    r_UP = np.transpose(r_UP.reshape(2*n,24)) 
+    r_DW = np.transpose(r_DW.reshape(2*n,24))
+    R_UP = np.transpose(R_UP.reshape(2*n,24))
+    R_DW = np.transpose(R_DW.reshape(2*n,24))
+    
+    
+    # Set objective: 
+    obj = (sum(sum(y0_c[temp,:]*l + mm_c[temp,:]/2*l*l) + sum(y0_g[temp,:]*p + mm_g[temp,:]/2*p*p)) +\
+           sum(gamma_i*q_imp + gamma_e*q_exp) + sum(0.001*sum(q_pos))) +\
+           sum(sum(CR_UP[temp,:]*R_UP) + sum(CR_DW[temp,:]*R_DW)) +\
+           pi_res_UP*(sum(-sum(y0_c[temp,:]*r_UP[:,n:] + mm_c[temp,:]/2*r_UP[:,n:]*r_UP[:,n:]) + sum(y0_g[temp,:]*r_UP[:,:n] + mm_g[temp,:]/2*r_UP[:,:n]*r_UP[:,:n]))) +\
+           pi_res_DW*(sum(-sum(y0_c[temp,:]*r_DW[:,n:] + mm_c[temp,:]/2*r_DW[:,n:]*r_DW[:,n:]) - sum(y0_g[temp,:]*r_DW[:,:n] + mm_g[temp,:]/2*r_DW[:,:n]*r_DW[:,:n])))
+    CT_m.setObjective(obj)
+    
+    # Add constraint
+    for k in range(24):
+        for i in range(n):
+            CT_m.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] == 0, name="pros[%s,%s]"% (k,i))
+            CT_m.addConstr(q[k,i] <= q_pos[k,i])
+            CT_m.addConstr(q[k,i] >= -q_pos[k,i])
+            CT_m.addConstr(p[k,i] - PV_old[k,i] + R_UP[k,i] <= Pmax[i], name="R_UP_limit_p[%s,%s]"% (k,i))
+            CT_m.addConstr(p[k,i] - PV_old[k,i] - R_DW[k,i] >= Pmin[i], name="R_DW_limit_p[%s,%s]"% (k,i))
+            CT_m.addConstr(l[k,i] + R_UP[k,i+n] <= Lmax[k,i], name="R_UP_limit_l[%s,%s]"% (k,i))
+            CT_m.addConstr(l[k,i] - R_DW[k,i+n] >= Lmin[k,i], name="R_DW_limit_l[%s,%s]"% (k,i))
+        for i in range(2*n):
+            CT_m.addConstr(r_UP[k,i] - R_UP[k,i]<= 0, name="r_UP_limit[%s,%s]"% (k,i))
+            CT_m.addConstr(r_DW[k,i] - R_DW[k,i]<= 0, name="r_DW_limit[%s,%s]"% (k,i))
+        CT_m.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k))
+        CT_m.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
+        CT_m.addConstr(sum(beta[k,:]) - q_exp[k] == 0, name="exp_bal[%s]"%(k))
+        CT_m.addConstr(sum(r_UP[k,:]) - RES_UP[k] == 0, name="r_UP_requirement[%s]"%(k))
+        CT_m.addConstr(sum(r_DW[k,:]) - RES_DW[k] == 0, name="r_DW_requirement[%s]"%(k))
+        
+    for i in range(n): #nell'arco di tutto il giorno i conti sul carico devono tornare 
+    #per ogni prosumer, ma l'ottimizzazione è fatta ora per ora
+        CT_m.addConstr(sum(Agg_load[temp,i] + l[:,i]) == 0)
+#        for j in np.arange(0,24,window):
+#            CT_m.addConstr(sum(Agg_load[range(t+j,t+j+window),i] + l[range(j,j+window),i]) == 0)
+    CT_m.update()    
+        
+    CT_m.optimize()
+    for k in range(24):
+        for i in range(n):
+            CT_price_sol_res[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
+            CT_p_sol_res[i,t+k] = p[k,i].x
+            CT_l_sol_res[i,t+k] = l[k,i].x
+            CT_q_sol_res[i,t+k] = q[k,i].x
+            CT_alfa_sol_res[i,t+k] = alfa[k,i].x
+            CT_beta_sol_res[i,t+k] = beta[k,i].x
+        for i in range(2*n):
+            CT_r_UP_sol_res[i,t+k] = r_UP[k,i].x
+            CT_r_DW_sol_res[i,t+k] = r_DW[k,i].x
+            CT_R_UP_sol_res[i,t+k] = R_UP[k,i].x
+            CT_R_DW_sol_res[i,t+k] = R_DW[k,i].x
+        CT_price2_sol_res[0,t+k] = CT_m.getConstrByName("comm[%s]"%k).Pi
+        CT_price2_sol_res[1,t+k] = CT_m.getConstrByName("imp_bal[%s]"%k).Pi
+        CT_price2_sol_res[2,t+k] = CT_m.getConstrByName("exp_bal[%s]"%k).Pi
+        CT_imp_sol_res[t+k] = q_imp[k].x
+        CT_exp_sol_res[t+k] = q_exp[k].x
+# http://www.gurobi.com/documentation/7.5/refman/attributes.html
+    del CT_m
+
+CT_IE_sol_res = CT_imp_sol - CT_exp_sol
+            
+#%% SCENARIOS
+TMST = 8760*4
 
 # benchmark - BRP
 # scenario 1 - fixed tariff
-imbal_cost_1 = np.zeros([TMST,n])
+imbal_cost_tp_1 = np.zeros([TMST,n])
+numneg_1 = np.zeros([TMST,n])
+numpos_1 = np.zeros([TMST,n])
+denominator_1 = np.zeros([TMST,n])
 for t in range(TMST):
     for p in range(n):
+        denominator_1[t,p] = deltaPV[t,p]-deltaLoad[t,p]
         if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
-            imbal_cost_1[t,p] = - ret_price_imp*(deltaPV[t,p]-deltaLoad[t,p])
+            imbal_cost_tp_1[t,p] = - ret_price_imp*(deltaPV[t,p]-deltaLoad[t,p])
+            numneg_1[t,p] = imbal_cost_tp_1[t,p]
         else:
-            imbal_cost_1[t,p] = - ret_price_exp*(deltaPV[t,p]-deltaLoad[t,p])
-imbal_cost_p_1 = np.sum(imbal_cost_1, axis = 0)
-imbal_cost_p_perunit_imbal_1 = -abs(imbal_cost_p_1)/imbalance_prosumer
-imbal_cost_1 = np.sum(imbal_cost_1)
-total_p_1 = imbal_cost_p_1 + cost_DA_p
-total_1 = imbal_cost_1 + cost_DA
+            imbal_cost_tp_1[t,p] = - ret_price_exp*(deltaPV[t,p]-deltaLoad[t,p])
+            numpos_1[t,p] = imbal_cost_tp_1[t,p]
+perceived_price_1 = np.sum((numneg_1+numpos_1), axis=0)/np.sum(denominator_1, axis=0) 
+sigma_1 = np.std(perceived_price_1)
+sigmaMax_1 = max(perceived_price_1) - min(perceived_price_1)
+QoE_1 = 1 - sigma_1/sigmaMax_1
+#imbal_cost_p_perunit_imbal_1 = -abs(imbal_cost_p_1)/imbalance_prosumer
+imbal_cost_p_1 = np.sum(imbal_cost_tp_1, axis = 0)
+imbal_cost_1 = np.sum(imbal_cost_tp_1)
+costPercentage_p_1 = np.zeros(n)
+for p in range(n):
+    costPercentage_p_1[p] = (cost_DA_p[p]+imbal_cost_p_1[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
+costPercentage_1 = (cost_DA + imbal_cost_1 - cost_DA_PI1)/cost_DA_PI1
 
 # scenario 2 - dynamic tariff - 2 price system
-imbal_cost_2 = np.zeros([TMST,n])
+imbal_cost_tp_2 = np.zeros([TMST,n])
 for t in range(TMST):
     for p in range(n):
         if system_state[t] == 0:
-            imbal_cost_2[t,p] = - el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
+            imbal_cost_tp_2[t,p] = - el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
         if system_state[t] == 1:
             if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
-                imbal_cost_2[t,p] = - el_price_UP[t]*(deltaPV[t,p]-deltaLoad[t,p])
+                imbal_cost_tp_2[t,p] = - el_price_UP[t]*(deltaPV[t,p]-deltaLoad[t,p])
             else:
-                imbal_cost_2[t,p] = -el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
+                imbal_cost_tp_2[t,p] = -el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
         if system_state[t] == 2:
             if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
-                imbal_cost_2[t,p] = - el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
+                imbal_cost_tp_2[t,p] = - el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
             else:
-                imbal_cost_2[t,p] = -el_price_DW[t]*(deltaPV[t,p]-deltaLoad[t,p])
-imbal_cost_p_2 = np.sum(imbal_cost_2, axis = 0)
-imbal_cost_p_perunit_imbal_2 = -abs(imbal_cost_p_2)/imbalance_prosumer
-imbal_cost_2 = np.sum(imbal_cost_2)
-total_p_2 = imbal_cost_p_2 + cost_DA_p
-total_2 = imbal_cost_2 + cost_DA
+                imbal_cost_tp_2[t,p] = -el_price_DW[t]*(deltaPV[t,p]-deltaLoad[t,p])
+imbal_cost_p_2 = np.sum(imbal_cost_tp_2, axis = 0)
+#imbal_cost_p_perunit_imbal_2 = -abs(imbal_cost_p_2)/imbalance_prosumer
+imbal_cost_2 = np.sum(imbal_cost_tp_2)
+costPercentage_2_p = np.zeros(n)
+for p in range(n):
+    costPercentage_2_p[p] = (cost_DA_p[p]+imbal_cost_p_2[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
+costPercentage_2 = (cost_DA + imbal_cost_2 - cost_DA_PI1)/cost_DA_PI1        
+
 
 # SCENARI INTERMEDI
-imbal_cost_3 = np.zeros([TMST])
+imbal_cost_t_3 = np.zeros([TMST])
 for t in range(TMST):
     if imbalance_community[t] < 0:
-        imbal_cost_3[t] = - (el_price_BAL_fixed[t] + 0.1)*(imbalance_community[t])
+        imbal_cost_t_3[t] = - (ret_price_imp)*(imbalance_community[t])
     else:
-        imbal_cost_3[t] = - el_price_BAL_fixed[t]*(imbalance_community[t])
-imbal_cost_3 = np.sum(imbal_cost_3)
-imbal_weights = abs(imbalance_prosumer)/(abs(imbalance_prosumer).sum())
-imbal_cost_p_3 = np.empty(n)
+        imbal_cost_t_3[t] = - (ret_price_exp)*(imbalance_community[t])
+imbal_cost_tp_3 = np.ones([TMST,n])
+for t in range(TMST):
+    for p in range(n):
+        imbal_cost_tp_3[t,p] = imbal_cost_t_3[t]/n
+imbal_cost_p_3 = np.sum(imbal_cost_tp_3, axis = 0)
+imbal_cost_3 = np.sum(imbal_cost_t_3)
+#imbal_weights = abs(imbalance_prosumer)/(abs(imbalance_prosumer).sum())
+#for p in range(n):
+#    imbal_cost_p_3[p] = imbal_weights[p]*imbal_cost_3
+#imbal_cost_p_perunit_imbal_3 = imbal_cost_p_3/abs(imbalance_prosumer)
+costPercentage_3_p = np.zeros(n)
 for p in range(n):
-    imbal_cost_p_3[p] = imbal_weights[p]*imbal_cost_3
-imbal_cost_p_perunit_imbal_3 = imbal_cost_p_3/abs(imbalance_prosumer)
-total_p_3 = imbal_cost_p_3 + cost_DA_p
-total_3 = imbal_cost_3 + cost_DA
+    costPercentage_3_p[p] = (cost_DA_p[p]+imbal_cost_p_3[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
+costPercentage_3 = (cost_DA + imbal_cost_3 - cost_DA_PI1)/cost_DA_PI1
 
-imbal_cost_4 = np.zeros([TMST])
+imbal_cost_t_4 = np.zeros([TMST])
 for t in range(TMST):
     if system_state[t] == 0:
-            imbal_cost_4[t,p] = - el_price_DA[t]*imbalance_community[t]
+            imbal_cost_t_4[t,p] = - el_price_DA[t]*imbalance_community[t]
     if system_state[t] == 1:
         if imbalance_community[t] < 0:
-            imbal_cost_4[t] = - el_price_UP[t]*imbalance_community[t]
+            imbal_cost_t_4[t] = - el_price_UP[t]*imbalance_community[t]
         else:
-            imbal_cost_4[t] = - el_price_DA[t]*imbalance_community[t]
+            imbal_cost_t_4[t] = - el_price_DA[t]*imbalance_community[t]
     if system_state[t] == 2:
         if imbalance_community[t] < 0:
-            imbal_cost_4[t] = - el_price_DA[t]*imbalance_community[t]
+            imbal_cost_t_4[t] = - el_price_DA[t]*imbalance_community[t]
         else:
-            imbal_cost_4[t] = - el_price_DW[t]*imbalance_community[t]
-imbal_cost_4 = np.sum(imbal_cost_4)
-imbal_weights = abs(imbalance_prosumer)/(abs(imbalance_prosumer).sum())
-imbal_cost_p_4 = np.empty(n)
+            imbal_cost_t_4[t] = - el_price_DW[t]*imbalance_community[t]
+imbal_cost_tp_4 = np.ones([TMST,n])
+#numerator_4 = np.ones([TMST,n])
+#denominator_4 = np.ones([TMST,n])
+for t in range(TMST):
+    for p in range(n):
+        imbal_cost_tp_4[t,p] = imbal_cost_t_4[t]/n
+#        numerator_4[t,p] = -(-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*ret_price_exp - CT_alfa_sol_bal[p,t]*ret_price_imp
+#        denominator_4[t,p] = CT_beta_sol_bal[p,t] - CT_alfa_sol_bal[p,t] - CT_q_sol_bal[p,t]
+imbal_cost_p_4 = np.sum(imbal_cost_tp_4, axis = 0)
+imbal_cost_4 = np.sum(imbal_cost_t_4)
+#perceived_price_4 = np.sum(numerator_4, axis = 0)/np.sum(denominator_4, axis = 0)
+
+#sigma_4 = np.std(perceived_price_4)
+#sigmaMax_4 = max(perceived_price_4) - min(perceived_price_4)
+#QoE_4 = 1 - sigma_4/sigmaMax_4
+#imbal_weights = abs(imbalance_prosumer)/(abs(imbalance_prosumer).sum())
+#imbal_cost_p_4 = np.empty(n)
+#for p in range(n):
+#    imbal_cost_p_4[p] = imbal_weights[p]*imbal_cost_4
+#imbal_cost_p_perunit_imbal_4 = imbal_cost_p_4/abs(imbalance_prosumer)
+costPercentage_4_p = np.zeros(n)
 for p in range(n):
-    imbal_cost_p_4[p] = imbal_weights[p]*imbal_cost_4
-imbal_cost_p_perunit_imbal_4 = imbal_cost_p_4/abs(imbalance_prosumer)
-total_p_4 = imbal_cost_p_4 + cost_DA_p
-total_4 = imbal_cost_4 + cost_DA
+    costPercentage_4_p[p] = (cost_DA_p[p]+imbal_cost_p_4[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
+costPercentage_4 = (cost_DA + imbal_cost_4 - cost_DA_PI1)/cost_DA_PI1
+
 
 #%% Community BALANCING - CENTRALIZED solution - SCENARIO 5 and 6
 # choose here:
-scenario = 5
+scenario = 6
+
+TMST = 8760*4
 
 CT_p_sol_bal = np.zeros((g,TMST))
 CT_l_sol_bal = np.zeros((n,TMST))
@@ -727,8 +1013,8 @@ for t in np.arange(0,TMST,96):  # for t = 0, 24
     q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(96)])
     q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(96)]) 
     if scenario == 5:
-        gamma_i = (el_price_BAL_fixed[temp] + 0.1) 
-        gamma_e = -el_price_BAL_fixed[temp]     
+        gamma_i = ret_price_imp*np.ones(TMST)[temp]
+        gamma_e = -ret_price_exp*np.ones(TMST)[temp] 
     if scenario == 6:
         gamma_i = el_price_UP[temp]     
         gamma_e = -el_price_DW[temp]       
@@ -796,58 +1082,65 @@ CT_IE_sol_bal = CT_imp_sol_bal - CT_exp_sol_bal
 # IMBALANCE COSTS
 if scenario == 5:
     #total costs
-    imbal_cost_5 = np.empty([TMST])
-    for i in range(TMST):
-        imbal_cost_5[i] = (sum(y0_c_bal[i,:]*CT_l_sol_bal[:,i] + mm_c_bal[i,:]/2*CT_l_sol_bal[:,i]*CT_l_sol_bal[:,i]) + sum(y0_g_bal[i,:]*CT_p_sol_bal[:,i] + mm_g_bal[i,:]/2*CT_p_sol_bal[:,i]*CT_p_sol_bal[:,i]) + 
-                    (el_price_BAL_fixed[i]+0.1)*CT_imp_sol_bal[i] - el_price_BAL_fixed[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i])))
-    imbal_cost_5 = np.sum(imbal_cost_5)
-    #cost each prosumer each time interval
-    costrev_5 = np.empty([TMST,n])
+    imbal_cost_tp_5 = np.empty([TMST,n])
     numerator_5 = np.empty([TMST,n])
     denominator_5 = np.empty([TMST,n])
     for t in range(TMST):
         for p in range(n):
-            costrev_5[t,p] =0.001*abs(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] + CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1) + \
+            imbal_cost_tp_5[t,p] = (-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*ret_price_exp + CT_alfa_sol_bal[p,t]*(ret_price_imp) + \
                             y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-            numerator_5[t,p] = -(-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_BAL_fixed[t] - CT_alfa_sol_bal[p,t]*(el_price_BAL_fixed[t]+0.1)
+            numerator_5[t,p] = -(-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*ret_price_exp - CT_alfa_sol_bal[p,t]*ret_price_imp
             denominator_5[t,p] = CT_beta_sol_bal[p,t] - CT_alfa_sol_bal[p,t] - CT_q_sol_bal[p,t]
-#            if abs(denominator_5[t,p]) < 10*1e-4:
-#                denominator_5[t,p] = 0
+    #imbal_cost_5 = np.sum(imbal_cost_5)
+    #cost each prosumer each time interval
     perceived_price_5 = np.sum(numerator_5, axis = 0)/np.sum(denominator_5, axis = 0)
 #    perceived_price_5[np.isinf(perceived_price_5)] = 0
     sigma_5 = np.std(perceived_price_5)
     sigmaMax_5 = max(perceived_price_5) - min(perceived_price_5)
     QoE_5 = 1 - sigma_5/sigmaMax_5
-    imbal_cost_p_5 = np.sum(costrev_5, axis=0)
-    costrev_5_tot = np.sum(imbal_cost_p_5) # just to check that this is equal to imbal_cost_5
+    imbal_cost_p_5 = np.sum(imbal_cost_tp_5, axis=0)
+    imbal_cost_5 = np.sum(imbal_cost_p_5) # just to check that this is equal to imbal_cost_5
     imbal_cost_p_perunit_imbal_5 = -abs(imbal_cost_p_5)/imbalance_prosumer
+    costPercentage_5_p = np.zeros(n)
+    for p in range(n):
+        costPercentage_5_p[p] = (cost_DA_p[p]+imbal_cost_p_5[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
+costPercentage_5 = (cost_DA + imbal_cost_5 - cost_DA_PI1)/cost_DA_PI1
 
 if scenario == 6:
     #total costs
-    imbal_cost_6 = np.empty([TMST])
-    for i in range(TMST):
-        imbal_cost_6[i] = (sum(y0_c_bal[i,:]*CT_l_sol_bal[:,i] + mm_c_bal[i,:]/2*CT_l_sol_bal[:,i]*CT_l_sol_bal[:,i]) + sum(y0_g_bal[i,:]*CT_p_sol_bal[:,i] + mm_g_bal[i,:]/2*CT_p_sol_bal[:,i]*CT_p_sol_bal[:,i]) + 
-                  el_price_UP[i]*CT_imp_sol_bal[i] - el_price_DW[i]*CT_exp_sol_bal[i] + 0.001*sum(abs(CT_q_sol_bal[:,i]))) #+ pr_i*sum(CT_alfa_sol[:,i1]) + pr_e*sum(CT_beta_sol[:,i1]))
-    imbal_cost_6 = np.sum(imbal_cost_6)
+    imbal_cost_tp_6 = np.empty([TMST,n])
+    numerator_6 = np.empty([TMST,n])
+    denominator_6 = np.empty([TMST,n])
     #cost each prosumer each time interval
-    costrev_6 = np.empty([TMST,n])
     for t in range(TMST):
         for p in range(n):
             if system_state[t] == 2:
-                costrev_6[t,p] = 0.001*abs(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DW[t] + CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
+                imbal_cost_tp_6[t,p] = (-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DW[t] + CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
                 y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
             elif system_state[t] == 1:
-                costrev_6[t,p] = 0.001*abs(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DA[t] + CT_alfa_sol_bal[p,t]*el_price_UP[t] + \
+                imbal_cost_tp_6[t,p] = (-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DA[t] + CT_alfa_sol_bal[p,t]*el_price_UP[t] + \
                 y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
             else:
-                costrev_6[t,p] = 0.001*abs(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DA[t] + CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
+                imbal_cost_tp_6[t,p] = (-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DA[t] + CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
                 y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-    imbal_cost_p_6= np.sum(costrev_6, axis=0)
-    costrev_6_tot = np.sum(imbal_cost_p_6) # just to check that this is equal to imbal_cost_6
+            numerator_6[t,p] = -(-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_DW[t] - CT_alfa_sol_bal[p,t]*el_price_UP[t]
+            denominator_6[t,p] = CT_beta_sol_bal[p,t] - CT_alfa_sol_bal[p,t] - CT_q_sol_bal[p,t]
+    #imbal_cost_5 = np.sum(imbal_cost_5)
+    #cost each prosumer each time interval
+    perceived_price_6 = np.sum(numerator_6, axis = 0)/np.sum(denominator_6, axis = 0)
+#    perceived_price_5[np.isinf(perceived_price_5)] = 0
+    sigma_6 = np.std(perceived_price_6)
+    sigmaMax_6 = max(perceived_price_6) - min(perceived_price_6)
+    QoE_6 = 1 - sigma_5/sigmaMax_5
+    imbal_cost_p_6= np.sum(imbal_cost_tp_6, axis=0)
+    imbal_cost_6= np.sum(imbal_cost_p_6) # just to check that this is equal to imbal_cost_6
     imbal_cost_p_perunit_imbal_6 = -abs(imbal_cost_p_6)/imbalance_prosumer
-    
+    costPercentage_6_p = np.zeros(n)
+    for p in range(n):
+        costPercentage_6_p[p] = (cost_DA_p[p]+imbal_cost_p_6[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
+costPercentage_6 = (cost_DA + imbal_cost_6 - cost_DA_PI1)/cost_DA_PI1
 
-##%% pics
+#%% pics
 ## prosumers' costs per unit of imbalance accross scenarios
 #fig_perunit_cost = plt.figure(1,figsize=[10,6])
 #ax1, = plt.plot(imbal_cost_p_perunit_imbal_1,label='scenario 1F')
@@ -930,8 +1223,8 @@ TMST = 48*4
 
 scenario = 5
 if scenario == 5:
-    el_price_exp = el_price_BAL_fixed
-    el_price_imp = el_price_exp + 0.1
+    el_price_exp = ret_price_exp
+    el_price_imp = ret_price_imp
 if scenario == 6:
     el_price_exp = el_price_DW
     el_price_imp = el_price_UP
