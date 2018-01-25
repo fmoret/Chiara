@@ -93,13 +93,67 @@ for t in range(4*TMST):
 ret_price_exp = np.average(el_price_DW)
 ret_price_imp = np.average(el_price_UP)
 
+#%% Imbalances
+
+PV_bal = np.repeat(PV, 4, axis=0)
+Load_bal = np.repeat(Load, 4, axis=0)
+
+# create noise for PV (only if PV nonzero) 
+noise_PV_DA_dataframe = pd.read_csv(data_path2+r'\noise_PV_DA.csv', header=None)
+noise_PV_DA = noise_PV_DA_dataframe.values
+
+for row in range(noise_PV_DA.shape[0]):
+    for col in range(noise_PV_DA.shape[1]):
+        if PV[row,col] == 0:
+            noise_PV_DA[row,col] = 0
+            
+# adding noise to PV (and if the result is less than zero bring it to zero)
+PV_real_DA = PV + noise_PV_DA
+for row in range(PV_real_DA.shape[0]):
+    for col in range(PV_real_DA.shape[1]):
+        if PV_real_DA[row,col] < 0:
+            PV_real_DA[row,col] = 0
+PV_real_bal = np.repeat(PV_real_DA, 4, axis=0)
+
+# create noise for Load
+noise_Load_DA_dataframe = pd.read_csv(data_path2+r'\noise_Load_DA.csv', header=None)
+noise_Load_DA = noise_Load_DA_dataframe.values
+
+# adding noise to Load (and if the result is less than zero bring it to zero)
+Load_real_DA = Load + noise_Load_DA
+for row in range(Load_real_DA.shape[0]):
+    for col in range(Load_real_DA.shape[1]):
+        if Load_real_DA[row,col] < 0:
+            Load_real_DA[row,col] = 0
+Load_real_bal = np.repeat(Load_real_DA, 4, axis=0)
+
+# IMBALANCES
+deltaPV = PV_real_bal - PV_bal
+deltaPV_DA = deltaPV[1::4]
+deltaLoad = Load_real_bal - Load_bal
+deltaLoad_DA = deltaPV[1::4]
+deltaPV_prosumer = np.empty([n])
+deltaLoad_prosumer = np.empty([n])
+deltaPV_community = np.empty([4*TMST])
+deltaLoad_community = np.empty([4*TMST])
+
+for p in range(n):
+    deltaPV_prosumer[p] = np.sum(deltaPV[:,p])
+    deltaLoad_prosumer[p] = np.sum(deltaLoad[:,p])
+for t in range(4*TMST):
+    deltaPV_community[t] = np.sum(deltaPV[t,:])
+    deltaLoad_community[t] = np.sum(deltaLoad[t,:])
+    
+imbalance_prosumer = deltaPV_prosumer - deltaLoad_prosumer
+imbalance_community = deltaPV_community - deltaLoad_community
+average_imbal_community = np.average(imbalance_community)
 
 #%% Community CENTRALIZED DA + reserve (uncertainty)
 n = 15
 TMST = 48
-RES_UP = 0.3*np.ones(8760)
+#RES_UP = 0.3*np.ones(8760)
 #RES_UP = np.zeros(8760)
-#RES_UP = imbalance_community[0::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
+RES_UP = abs(imbalance_community)[1::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
 RES_DW = RES_UP
 CR_UP = 0.005*np.ones([TMST,2*n])
 CR_DW = 0.005*np.ones([TMST,2*n])
@@ -154,11 +208,10 @@ for t in np.arange(0,TMST,24):  # for t = 0, 24
     R_UP = np.transpose(R_UP.reshape(2*n,24))
     R_DW = np.transpose(R_DW.reshape(2*n,24))
     
-    
     # Set objective: 
     obj = sum(sum(y0_c[temp,:]*(-l) + mm_c[temp,:]/2*(-l)*(-l)) + sum(y0_g[temp,:]*p + mm_g[temp,:]/2*p*p) +\
            sum(gamma_i*q_imp + gamma_e*q_exp) + sum(0.001*sum(q_pos)) +\
-           sum(CR_UP[temp,:]*R_UP) + sum(CR_DW[temp,:]*R_DW) +\
+           sum(sum(CR_UP[temp,:]*R_UP)) + sum(sum(CR_DW[temp,:]*R_DW)) +\
            pi_res_UP*(sum(y0_c[temp,:]*(r_UP[:,n:]) + mm_c[temp,:]/2*(r_UP[:,n:])*(r_UP[:,n:])) + sum(y0_g[temp,:]*r_UP[:,:n] + mm_g[temp,:]/2*r_UP[:,:n]*r_UP[:,:n])) +\
            pi_res_DW*(sum(y0_c[temp,:]*(-r_DW[:,n:]) + mm_c[temp,:]/2*(-r_DW[:,n:])*(-r_DW[:,n:])) + sum(y0_g[temp,:]*(-r_DW[:,:n]) + mm_g[temp,:]/2*(-r_DW[:,:n])*(-r_DW[:,:n]))))
     CT_m_res.setObjective(obj)
@@ -179,8 +232,10 @@ for t in np.arange(0,TMST,24):  # for t = 0, 24
         CT_m_res.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k))
         CT_m_res.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
         CT_m_res.addConstr(sum(beta[k,:]) - q_exp[k] == 0, name="exp_bal[%s]"%(k))
-        CT_m_res.addConstr(sum(r_UP[k,:]) - RES_UP[k] == 0, name="r_UP_requirement[%s]"%(k))
-        CT_m_res.addConstr(sum(r_DW[k,:]) - RES_DW[k] == 0, name="r_DW_requirement[%s]"%(k))
+#        CT_m_res.addConstr(sum(r_UP[k,:]) - RES_UP[t+k] == 0, name="r_UP_requirement[%s]"%(k))
+#        CT_m_res.addConstr(sum(r_DW[k,:]) - RES_DW[t+k] == 0, name="r_DW_requirement[%s]"%(k))
+        CT_m_res.addConstr(sum(r_UP[k,:]) - RES_UP[t+k] == 0, name="r_UP_requirement[%s]"%(k))
+        CT_m_res.addConstr(sum(r_DW[k,:]) - RES_DW[t+k] == 0, name="r_DW_requirement[%s]"%(k))
         
     for i in range(n):         
         CT_m_res.addConstr(sum(Agg_load[temp,i] - l[:,i]) == 0)
