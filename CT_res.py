@@ -10,6 +10,7 @@ import shelve
 import pandas as pd
 from pathlib import Path
 import os
+from TMST_def import TMST, TMST_run
 
 dd1 = os.getcwd()
 data_path = str(Path(dd1).parent.parent)+r'\trunk\Input Data 2'
@@ -41,7 +42,7 @@ PostCode = d['PostCode']
 
 n = b2.shape[1]
 g = b1.shape[1]
-TMST = 8760#b2.shape[0]
+
 
 Lmin = - (Agg_load + Flex_load)
 Lmax = - Load #baseload
@@ -66,34 +67,8 @@ if sum(abs(mm_g[np.isinf(mm_g)]))>0:
     mm_g[np.isinf(abs(mm_g))] = 0
 y0_g[np.isnan(y0_g)] = 0        
 mm_g[np.isnan(mm_g)] = 0
-     
-# balancing prices (every 15 mins)
-el_price_DA = np.repeat(el_price_e, 4, axis=0)
-el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0) # 2 rows
-el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0) # 2 rows
 
-system_state = np.empty([4*TMST])
-for t in range(4*TMST):
-    if el_price_DA[t] == el_price_DW[t]: #up-regulation
-        system_state[t] = 1
-    elif el_price_DA[t] == el_price_UP[t]: #dw-regulation
-        system_state[t] = 2
-    elif el_price_DW[t] == el_price_UP[t]: #balance
-        system_state = 0
-
-el_price_BAL = np.empty([4*TMST]) # 1 row (FINAL BAL price)
-for t in range(4*TMST):
-    if system_state[t] == 0:                # 0 is balanced
-        el_price_BAL[t] = el_price_UP[t]
-    elif system_state[t] == 1:              # 1 is UP
-        el_price_BAL[t] = el_price_UP[t]
-    elif system_state[t] == 2:              # 2 is DW
-        el_price_BAL[t] = el_price_DW[t]
-    
-ret_price_exp = np.average(el_price_DW)
-ret_price_imp = np.average(el_price_UP)
-
-#%% Imbalances
+#%% Imbalances - all this part needed if we want a correlation between the reserve requirement and the actual imbalance
 
 PV_bal = np.repeat(PV, 4, axis=0)
 Load_bal = np.repeat(Load, 4, axis=0)
@@ -150,32 +125,31 @@ average_imbal_community = np.average(imbalance_community)
 
 #%% Community CENTRALIZED DA + reserve (uncertainty)
 n = 15
-TMST = 48
 #RES_UP = 0.3*np.ones(8760)
 #RES_UP = np.zeros(8760)
 RES_UP = abs(imbalance_community)[1::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
 RES_DW = RES_UP
-CR_UP = 0.005*np.ones([TMST,2*n])
-CR_DW = 0.005*np.ones([TMST,2*n])
+CR_UP = 0.005*np.ones([TMST_run,2*n])
+CR_DW = 0.005*np.ones([TMST_run,2*n])
 pi_res_UP = 0.05
 pi_res_DW = 0.05
 
-CT_p_sol_res = np.zeros((n,TMST))
-CT_l_sol_res = np.zeros((n,TMST))
-CT_q_sol_res = np.zeros((n,TMST))
-CT_r_UP_sol_res = np.zeros((2*n,TMST))
-CT_r_DW_sol_res = np.zeros((2*n,TMST))
-CT_R_UP_sol_res = np.zeros((2*n,TMST))
-CT_R_DW_sol_res = np.zeros((2*n,TMST))
-CT_alfa_sol_res = np.zeros((n,TMST))
-CT_beta_sol_res = np.zeros((n,TMST))
-CT_imp_sol_res = np.zeros(TMST)
-CT_exp_sol_res = np.zeros(TMST)
-CT_obj_sol_res = np.zeros(TMST)
-CT_price_sol_res = np.zeros((n,TMST))
-CT_price2_sol_res = np.zeros((3,TMST))
+CT_p_sol_res = np.zeros((n,TMST_run))
+CT_l_sol_res = np.zeros((n,TMST_run))
+CT_q_sol_res = np.zeros((n,TMST_run))
+CT_r_UP_sol_res = np.zeros((2*n,TMST_run))
+CT_r_DW_sol_res = np.zeros((2*n,TMST_run))
+CT_R_UP_sol_res = np.zeros((2*n,TMST_run))
+CT_R_DW_sol_res = np.zeros((2*n,TMST_run))
+CT_alfa_sol_res = np.zeros((n,TMST_run))
+CT_beta_sol_res = np.zeros((n,TMST_run))
+CT_imp_sol_res = np.zeros(TMST_run)
+CT_exp_sol_res = np.zeros(TMST_run)
+CT_obj_sol_res = np.zeros(TMST_run)
+CT_price_sol_res = np.zeros((n,TMST_run))
+CT_price2_sol_res = np.zeros((3,TMST_run))
 
-for t in np.arange(0,TMST,24):  # for t = 0, 24
+for t in np.arange(0,TMST_run,24):  # for t = 0, 24
     temp = range(t,t+24)
     # Create a new model
     CT_m_res = gb.Model("qp")
@@ -232,15 +206,11 @@ for t in np.arange(0,TMST,24):  # for t = 0, 24
         CT_m_res.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k))
         CT_m_res.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
         CT_m_res.addConstr(sum(beta[k,:]) - q_exp[k] == 0, name="exp_bal[%s]"%(k))
-#        CT_m_res.addConstr(sum(r_UP[k,:]) - RES_UP[t+k] == 0, name="r_UP_requirement[%s]"%(k))
-#        CT_m_res.addConstr(sum(r_DW[k,:]) - RES_DW[t+k] == 0, name="r_DW_requirement[%s]"%(k))
         CT_m_res.addConstr(sum(r_UP[k,:]) - RES_UP[t+k] == 0, name="r_UP_requirement[%s]"%(k))
         CT_m_res.addConstr(sum(r_DW[k,:]) - RES_DW[t+k] == 0, name="r_DW_requirement[%s]"%(k))
         
     for i in range(n):         
         CT_m_res.addConstr(sum(Agg_load[temp,i] - l[:,i]) == 0)
-#        for j in np.arange(0,24,window):
-#            CT_m.addConstr(sum(Agg_load[range(t+j,t+j+window),i] + l[range(j,j+window),i]) == 0)
     CT_m_res.update()    
         
     CT_m_res.optimize()
@@ -262,8 +232,16 @@ for t in np.arange(0,TMST,24):  # for t = 0, 24
         CT_price2_sol_res[2,t+k] = CT_m_res.getConstrByName("exp_bal[%s]"%k).Pi
         CT_imp_sol_res[t+k] = q_imp[k].x
         CT_exp_sol_res[t+k] = q_exp[k].x
-# http://www.gurobi.com/documentation/7.5/refman/attributes.html
-    #del CT_m_res
 
 CT_IE_sol_res = CT_imp_sol_res - CT_exp_sol_res
-            
+
+cost_res_tp = np.zeros([TMST_run,n]) 
+for t in range(TMST_run):
+    for p in range(n):
+        cost_res_tp[t,p] = y0_c[t,p]*CT_l_sol_res[p,t] + mm_c[t,p]/2*CT_l_sol_res[p,t]*CT_l_sol_res[p,t] + y0_g[t,p]*CT_p_sol_res[p,t] + mm_g[t,p]/2*CT_p_sol_res[p,t]*CT_p_sol_res[p,t]+\
+                          CT_alfa_sol_res[p,t]*CT_imp_sol_res[t] + CT_beta_sol_res[p,t]*CT_exp_sol_res[t] + (-CT_price2_sol_res[0,t])*(CT_q_sol_res[p,t]) -\
+                          CR_UP[t,p]*CT_R_UP_sol_res[p,t]- CR_UP[t,p+n]*CT_R_UP_sol_res[p+n,t] - CR_DW[t,p]*CT_R_DW_sol_res[p,t]- CR_DW[t,p+n]*CT_R_DW_sol_res[p+n,t]
+
+cost_res_tp_times4 = np.repeat(cost_res_tp, 4, axis=0)
+cost_res_p = np.sum(cost_res_tp_times4, axis=0)
+cost_res = np.sum(cost_res_p)

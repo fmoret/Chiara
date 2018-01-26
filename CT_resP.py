@@ -10,6 +10,7 @@ import shelve
 import pandas as pd
 from pathlib import Path
 import os
+from TMST_def import TMST, TMST_run
 
 dd1 = os.getcwd() 
 data_path = str(Path(dd1).parent.parent)+r'\trunk\Input Data 2'
@@ -40,7 +41,6 @@ PostCode = d['PostCode']
 #os.chdir(dd1)
 n = b2.shape[1]
 g = b1.shape[1]
-TMST = 8760#b2.shape[0]
 
 Lmin = - (Agg_load + Flex_load)
 Lmax = - Load #baseload
@@ -71,8 +71,8 @@ el_price_DA = np.repeat(el_price_e, 4, axis=0)
 el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0) # 2 rows
 el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0) # 2 rows
 
-system_state = np.empty([TMST])
-for t in range(TMST):
+system_state = np.empty([4*TMST])
+for t in range(4*TMST):
     if el_price_DA[t] == el_price_DW[t]: #up-regulation
         system_state[t] = 1
     elif el_price_DA[t] == el_price_UP[t]: #dw-regulation
@@ -80,8 +80,8 @@ for t in range(TMST):
     elif el_price_DW[t] == el_price_UP[t]: #balance
         system_state = 0
 
-el_price_BAL = np.empty([TMST]) # 1 row (FINAL BAL price)
-for t in range(TMST):
+el_price_BAL = np.empty([4*TMST]) # 1 row (FINAL BAL price)
+for t in range(4*TMST):
     if system_state[t] == 0:                # 0 is balanced
         el_price_BAL[t] = el_price_UP[t]
     elif system_state[t] == 1:              # 1 is UP
@@ -95,7 +95,6 @@ ret_price_imp = np.average(el_price_UP)
 
 #%% Community CENTRALIZED solution with reserve POP-OUT
 n = 15
-TMST = 48
 
 # prices
 delta_lambda_UP = np.average(el_price_UP) - np.average(el_price_e)
@@ -104,24 +103,24 @@ lambda_UP = (el_price_e + 0.1) + delta_lambda_UP*np.ones(len(el_price_e))
 lambda_DW = (el_price_e) + delta_lambda_DW*np.ones(len(el_price_e))
 
 # allocate variables
-CT_p_sol_resP = np.zeros((n,TMST))
-CT_l_sol_resP = np.zeros((n,TMST))
-CT_q_sol_resP = np.zeros((n,TMST))
-CT_R_UP_sol_resP = np.zeros(TMST)
-CT_R_DW_sol_resP = np.zeros(TMST)
-CT_r_p_UP_sol_resP = np.zeros((n,TMST))
-CT_r_p_DW_sol_resP = np.zeros((n,TMST))
-CT_r_l_UP_sol_resP = np.zeros((n,TMST))
-CT_r_l_DW_sol_resP = np.zeros((n,TMST))
-CT_alfa_sol_resP = np.zeros((n,TMST))
-CT_beta_sol_resP = np.zeros((n,TMST))
-CT_imp_sol_resP = np.zeros(TMST)
-CT_exp_sol_resP = np.zeros(TMST)
-CT_obj_sol_resP = np.zeros(TMST)
-CT_price_sol_resP = np.zeros((n,TMST))
-CT_price2_sol_resP = np.zeros((3,TMST))
+CT_p_sol_resP = np.zeros((n,TMST_run))
+CT_l_sol_resP = np.zeros((n,TMST_run))
+CT_q_sol_resP = np.zeros((n,TMST_run))
+CT_R_UP_sol_resP = np.zeros(TMST_run)
+CT_R_DW_sol_resP = np.zeros(TMST_run)
+CT_r_p_UP_sol_resP = np.zeros((n,TMST_run))
+CT_r_p_DW_sol_resP = np.zeros((n,TMST_run))
+CT_r_l_UP_sol_resP = np.zeros((n,TMST_run))
+CT_r_l_DW_sol_resP = np.zeros((n,TMST_run))
+CT_alfa_sol_resP = np.zeros((n,TMST_run))
+CT_beta_sol_resP = np.zeros((n,TMST_run))
+CT_imp_sol_resP = np.zeros(TMST_run)
+CT_exp_sol_resP = np.zeros(TMST_run)
+CT_obj_sol_resP = np.zeros(TMST_run)
+CT_price_sol_resP = np.zeros((n,TMST_run))
+CT_price2_sol_resP = np.zeros((3,TMST_run))
 
-for t in np.arange(0,TMST,24):  # for t = 0, 24
+for t in np.arange(0,TMST_run,24):  # for t = 0, 24
     temp = range(t,t+24)
     # Create a new model
     CT_m_resP = gb.Model("qp")
@@ -211,3 +210,14 @@ for t in np.arange(0,TMST,24):  # for t = 0, 24
     del CT_m_resP
 
 CT_IE_sol_resP = CT_imp_sol_resP - CT_exp_sol_resP
+
+cost_resP_tp = np.zeros([TMST_run,n]) 
+for t in range(TMST_run):
+    for p in range(n):
+        cost_resP_tp[t,p] = y0_c[t,p]*CT_l_sol_resP[p,t] + mm_c[t,p]/2*CT_l_sol_resP[p,t]*CT_l_sol_resP[p,t] + y0_g[t,p]*CT_p_sol_resP[p,t] + mm_g[t,p]/2*CT_p_sol_resP[p,t]*CT_p_sol_resP[p,t]+\
+                          CT_alfa_sol_resP[p,t]*CT_imp_sol_resP[t] + CT_beta_sol_resP[p,t]*CT_exp_sol_resP[t] + (-CT_price2_sol_resP[0,t])*(CT_q_sol_resP[p,t])
+                         
+
+cost_resP_tp_times4 = np.repeat(cost_resP_tp, 4, axis=0)
+cost_resP_p = np.sum(cost_resP_tp_times4, axis=0)
+cost_resP = np.sum(cost_resP_p)
