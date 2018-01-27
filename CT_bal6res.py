@@ -146,10 +146,10 @@ average_imbal_community = np.average(imbalance_community)
 #p_tilde = np.repeat(p_1, 4, axis=0)
 #l_tilde = np.repeat(l_1, 4, axis=0)
 #lambda_CED = np.repeat(price_community, 4, axis=0)
-from CT_DA import CT_p_sol, CT_l_sol, CT_price2_sol
-p_tilde = np.repeat(CT_p_sol.T, 4, axis=0)
-l_tilde = np.repeat(CT_l_sol.T, 4, axis=0)
-lambda_CED = np.repeat(-CT_price2_sol[0,:], 4, axis=0)
+from CT_res import CT_p_sol_res, CT_l_sol_res, CT_price2_sol_res
+p_tilde = np.repeat(CT_p_sol_res.T, 4, axis=0)
+l_tilde = np.repeat(CT_l_sol_res.T, 4, axis=0)
+lambda_CED = np.repeat(-CT_price2_sol_res[0,:], 4, axis=0)
 
 #==============================================================================
 # save OLD and calculate NEW Pmax, Pmin, Lmax, Lmin, intercepts and slopes

@@ -95,7 +95,7 @@ for t in np.arange(0,TMST_run,24):  # for t = 0, 24
     temp = range(t,t+24)
     # Create a new model
     CT_m = gb.Model("qp")
-    CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
+    #CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
     # Create variables
     p = np.array([CT_m.addVar(lb=Pmin[i]+PV[t+k,i], ub=Pmax[i]+PV[t+k,i]) for i in range(n) for k in range(24)])
     l = np.array([CT_m.addVar(lb=Lmin[t+k,i], ub=Lmax[t+k,i]) for i in range(n) for k in range(24)])

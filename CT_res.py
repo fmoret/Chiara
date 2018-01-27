@@ -125,9 +125,9 @@ average_imbal_community = np.average(imbalance_community)
 
 #%% Community CENTRALIZED DA + reserve (uncertainty)
 n = 15
-#RES_UP = 0.3*np.ones(8760)
+RES_UP = 0.8*np.ones(8760)
 #RES_UP = np.zeros(8760)
-RES_UP = abs(imbalance_community)[1::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
+#RES_UP = abs(imbalance_community)[1::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
 RES_DW = RES_UP
 CR_UP = 0.005*np.ones([TMST_run,2*n])
 CR_DW = 0.005*np.ones([TMST_run,2*n])
@@ -239,8 +239,8 @@ cost_res_tp = np.zeros([TMST_run,n])
 for t in range(TMST_run):
     for p in range(n):
         cost_res_tp[t,p] = y0_c[t,p]*CT_l_sol_res[p,t] + mm_c[t,p]/2*CT_l_sol_res[p,t]*CT_l_sol_res[p,t] + y0_g[t,p]*CT_p_sol_res[p,t] + mm_g[t,p]/2*CT_p_sol_res[p,t]*CT_p_sol_res[p,t]+\
-                          CT_alfa_sol_res[p,t]*CT_imp_sol_res[t] + CT_beta_sol_res[p,t]*CT_exp_sol_res[t] + (-CT_price2_sol_res[0,t])*(CT_q_sol_res[p,t]) -\
-                          CR_UP[t,p]*CT_R_UP_sol_res[p,t]- CR_UP[t,p+n]*CT_R_UP_sol_res[p+n,t] - CR_DW[t,p]*CT_R_DW_sol_res[p,t]- CR_DW[t,p+n]*CT_R_DW_sol_res[p+n,t]
+                          CT_alfa_sol_res[p,t]*CT_imp_sol_res[t] + CT_beta_sol_res[p,t]*CT_exp_sol_res[t] + (-CT_price2_sol_res[0,t])*(CT_q_sol_res[p,t]) #-\
+                          #CR_UP[t,p]*CT_R_UP_sol_res[p,t]- CR_UP[t,p+n]*CT_R_UP_sol_res[p+n,t] - CR_DW[t,p]*CT_R_DW_sol_res[p,t]- CR_DW[t,p+n]*CT_R_DW_sol_res[p+n,t]
 
 cost_res_tp_times4 = np.repeat(cost_res_tp, 4, axis=0)
 cost_res_p = np.sum(cost_res_tp_times4, axis=0)
