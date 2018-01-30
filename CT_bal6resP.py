@@ -74,65 +74,49 @@ y0_g[np.isnan(y0_g)] = 0
 mm_g[np.isnan(mm_g)] = 0
 
 #==============================================================================
-# data extension 1h --> 15 mins (repeat each row 4 times)
-#==============================================================================
-b2_bal = np.repeat(b2, 4, axis=0)
-c2_bal = np.repeat(c2, 4, axis=0)
-b1_bal = np.repeat(b1, 4, axis=0)
-c1_bal = np.repeat(c1, 4, axis=0)
-PV_bal = np.repeat(PV, 4, axis=0)
-Load_bal = np.repeat(Load, 4, axis=0)
-Flex_load_bal = np.repeat(Flex_load, 4, axis=0)
-
-#==============================================================================
 # create NOISE
 #==============================================================================
 # create noise for PV (only if PV nonzero) 
-noise_PV_DA_dataframe = pd.read_csv(data_path2+r'\noise_PV_DA.csv', header=None)
-noise_PV_DA = noise_PV_DA_dataframe.values
+noise_PV_dataframe = pd.read_csv(data_path2+r'\noise_PV_DA.csv', header=None)
+noise_PV = noise_PV_dataframe.values
 
-
-for row in range(noise_PV_DA.shape[0]):
-    for col in range(noise_PV_DA.shape[1]):
+for row in range(noise_PV.shape[0]):
+    for col in range(noise_PV.shape[1]):
         if PV[row,col] == 0:
-            noise_PV_DA[row,col] = 0
+            noise_PV[row,col] = 0
             
 # adding noise to PV (and if the result is less than zero bring it to zero)
-PV_real_DA = PV + noise_PV_DA
-for row in range(PV_real_DA.shape[0]):
-    for col in range(PV_real_DA.shape[1]):
-        if PV_real_DA[row,col] < 0:
-            PV_real_DA[row,col] = 0
-PV_real_bal = np.repeat(PV_real_DA, 4, axis=0)
+PV_real = PV + noise_PV
+for row in range(PV_real.shape[0]):
+    for col in range(PV_real.shape[1]):
+        if PV_real[row,col] < 0:
+            PV_real[row,col] = 0
 
 # create noise for Load
-noise_Load_DA_dataframe = pd.read_csv(data_path2+r'\noise_Load_DA.csv', header=None)
-noise_Load_DA = noise_Load_DA_dataframe.values
+noise_Load_dataframe = pd.read_csv(data_path2+r'\noise_Load_DA.csv', header=None)
+noise_Load = noise_Load_dataframe.values
 
 # adding noise to Load (and if the result is less than zero bring it to zero)
-Load_real_DA = Load + noise_Load_DA
-for row in range(Load_real_DA.shape[0]):
-    for col in range(Load_real_DA.shape[1]):
-        if Load_real_DA[row,col] < 0:
-            Load_real_DA[row,col] = 0
-Load_real_bal = np.repeat(Load_real_DA, 4, axis=0)
+Load_real = Load + noise_Load
+for row in range(Load_real.shape[0]):
+    for col in range(Load_real.shape[1]):
+        if Load_real[row,col] < 0:
+            Load_real[row,col] = 0
 
 #==============================================================================
 # # IMBALANCES
 #==============================================================================
-deltaPV = PV_real_bal - PV_bal
-deltaPV_DA = deltaPV[1::4]
-deltaLoad = Load_real_bal - Load_bal
-deltaLoad_DA = deltaPV[1::4]
+deltaPV = PV_real - PV
+deltaLoad = Load_real - Load
 deltaPV_prosumer = np.empty([n])
 deltaLoad_prosumer = np.empty([n])
-deltaPV_community = np.empty([4*TMST])
-deltaLoad_community = np.empty([4*TMST])
+deltaPV_community = np.empty([TMST])
+deltaLoad_community = np.empty([TMST])
 
 for p in range(n):
     deltaPV_prosumer[p] = np.sum(deltaPV[:,p])
     deltaLoad_prosumer[p] = np.sum(deltaLoad[:,p])
-for t in range(4*TMST):
+for t in range(TMST):
     deltaPV_community[t] = np.sum(deltaPV[t,:])
     deltaLoad_community[t] = np.sum(deltaLoad[t,:])
     
@@ -143,13 +127,10 @@ average_imbal_community = np.average(imbalance_community)
 #==============================================================================
 # retrieving and extending (1h --> 15min) set points and DA price from DA stage
 #==============================================================================
-#p_tilde = np.repeat(p_1, 4, axis=0)
-#l_tilde = np.repeat(l_1, 4, axis=0)
-#lambda_CED = np.repeat(price_community, 4, axis=0)
-from CT_resP import CT_p_sol_resP, CT_l_sol_resP, CT_price2_sol_resP
-p_tilde = np.repeat(CT_p_sol_resP.T, 4, axis=0)
-l_tilde = -np.repeat(CT_l_sol_resP.T, 4, axis=0)
-lambda_CED = np.repeat(-CT_price2_sol_resP[0,:], 4, axis=0)
+
+from CT_resP import CT_p_sol_resP, CT_l_sol_resP
+p_tilde_resP = CT_p_sol_resP.T
+l_tilde_resP = -CT_l_sol_resP.T # positive --> negative
 
 #==============================================================================
 # save OLD and calculate NEW Pmax, Pmin, Lmax, Lmin, intercepts and slopes
@@ -157,57 +138,53 @@ lambda_CED = np.repeat(-CT_price2_sol_resP[0,:], 4, axis=0)
 #==============================================================================
 Pmax_DA = Pmax
 Pmin_DA = Pmin
-Lmax_DA = np.repeat(Lmax, 4, axis=0)
-Lmin_DA = np.repeat(Lmin, 4, axis=0)
-y0_c_DA = np.repeat(y0_c, 4, axis=0)
-y0_g_DA = np.repeat(y0_g, 4, axis=0)
-mm_c_DA = np.repeat(mm_c, 4, axis=0)
-mm_g_DA = np.repeat(mm_g, 4, axis=0)
+Lmax_DA = Lmax
+Lmin_DA = Lmin
 
 # new Pmax and Pmin, Lmax and Lmin (referred to 15 mins time interval)----CHECK if correct as a concept!!!
-Pmax_bal = np.zeros((4*TMST_run,n))
-Pmin_bal = np.zeros((4*TMST_run,n))
-Lmax_bal = np.zeros((4*TMST_run,n))
-Lmin_bal = np.zeros((4*TMST_run,n))
-for t in range(4*TMST_run):
+Pmax_bal_resP = np.zeros((TMST_run,n))
+Pmin_bal_resP = np.zeros((TMST_run,n))
+Lmax_bal_resP = np.zeros((TMST_run,n))
+Lmin_bal_resP = np.zeros((TMST_run,n))
+for t in range(TMST_run):
     for p in range(n):
-        Pmax_bal[t,p] = Pmax_DA[p] + PV_bal[t,p] - p_tilde[t,p] 
-        Pmin_bal[t,p] = Pmin_DA[p] + PV_bal[t,p] - p_tilde[t,p]
-        Lmax_bal[t,p] = Lmax_DA[t,p] - l_tilde[t,p]
-        Lmin_bal[t,p] = Lmin_DA[t,p] - l_tilde[t,p]
+        Pmax_bal_resP[t,p] = Pmax_DA[p] + PV[t,p] - p_tilde_resP[t,p] 
+        Pmin_bal_resP[t,p] = Pmin_DA[p] + PV[t,p] - p_tilde_resP[t,p]
+        Lmax_bal_resP[t,p] = Lmax_DA[t,p] - l_tilde_resP[t,p]
+        Lmin_bal_resP[t,p] = Lmin_DA[t,p] - l_tilde_resP[t,p]
 
 #==============================================================================
 # COST and UTILITY FUNCTION - shifted
 #==============================================================================
-y0_g_bal = np.zeros((4*TMST,n))
-y0_c_bal = np.zeros((4*TMST,n))
+y0_g_bal_resP = np.zeros((TMST_run,n))
+y0_c_bal_resP = np.zeros((TMST_run,n))
 
 #CONSUMERS
 # intercept
-for t in range(4*TMST_run):
+for t in range(TMST_run):
     for p in range(n):
-        y0_c_bal[t,p] = y0_c_DA[t,p] + mm_c_DA[t,p]*l_tilde[t,p]
+        y0_c_bal_resP[t,p] = y0_c[t,p] + mm_c[t,p]*l_tilde_resP[t,p]
 # slope
-mm_c_bal = mm_c_DA
+mm_c_bal_resP = mm_c
 
 # GENERATORS        
 # intercept  
-for t in range(4*TMST_run):
+for t in range(TMST_run):
     for p in range(n):
-        y0_g_bal[t,p] = y0_g_DA[t,p] + mm_g_DA[t,p]*p_tilde[t,p]  
+        y0_g_bal_resP[t,p] = y0_g[t,p] + mm_g[t,p]*p_tilde_resP[t,p]  
 # slope
-mm_g_bal = mm_g_DA
+mm_g_bal_resP = mm_g
 
 #==============================================================================
 # PRICES
 #==============================================================================
 
-el_price_DA = np.repeat(el_price_e, 4, axis=0)/4
-el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0)/4 # 2 rows
-el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0)/4 # 2 rows
+el_price_DA = el_price_e
+el_price_DW = el_price_sampled[:,0]# 2 rows
+el_price_UP = el_price_sampled[:,2]
 
-system_state = np.empty([4*TMST])
-for t in range(4*TMST):
+system_state = np.empty([TMST])
+for t in range(TMST):
     if el_price_DA[t] == el_price_DW[t]: #up-regulation
         system_state[t] = 1
     elif el_price_DA[t] == el_price_UP[t]: #dw-regulation
@@ -215,8 +192,8 @@ for t in range(4*TMST):
     elif el_price_DW[t] == el_price_UP[t]: #balance
         system_state = 0
 
-el_price_BAL = np.empty([4*TMST]) # 1 row 
-for t in range(4*TMST):
+el_price_BAL = np.empty([TMST]) # 1 row 
+for t in range(TMST):
     if system_state[t] == 0:
         el_price_BAL[t] = el_price_UP[t]
     elif system_state[t] == 1:
@@ -229,26 +206,26 @@ ret_price_imp = np.average(el_price_UP)
 
 #%% Centralized COMMUNITY BALANCING scenario 6
 
-CT_p_sol_bal = np.zeros((g,4*TMST_run))
-CT_l_sol_bal = np.zeros((n,4*TMST_run))
-CT_q_sol_bal = np.zeros((n,4*TMST_run))
-CT_alfa_sol_bal = np.zeros((n,4*TMST_run))
-CT_beta_sol_bal = np.zeros((n,4*TMST_run))
-CT_imp_sol_bal = np.zeros(4*TMST_run)
-CT_exp_sol_bal = np.zeros(4*TMST_run)
-CT_obj_sol_bal = np.zeros(4*TMST_run)
-CT_price_sol_bal = np.zeros((n,4*TMST_run))
-CT_price2_sol_bal = np.zeros((3,4*TMST_run))
+CT_p_sol_bal_resP = np.zeros((g,TMST_run))
+CT_l_sol_bal_resP = np.zeros((n,TMST_run))
+CT_q_sol_bal_resP = np.zeros((n,TMST_run))
+CT_alfa_sol_bal_resP = np.zeros((n,TMST_run))
+CT_beta_sol_bal_resP = np.zeros((n,TMST_run))
+CT_imp_sol_bal_resP = np.zeros(TMST_run)
+CT_exp_sol_bal_resP = np.zeros(TMST_run)
+CT_obj_sol_bal_resP = np.zeros(TMST_run)
+CT_price_sol_bal_resP = np.zeros((n,TMST_run))
+CT_price2_sol_bal_resP = np.zeros((3,TMST_run))
 
-uff = np.int32(96*n_days)
-for t in np.arange(0,TMST_run,uff):  # for t = 0, 96
+uff = np.int32(24*n_days)
+for t in np.arange(0,TMST_run,uff):  # for t = 0, 24
     temp = range(t,t+uff)
     # Create a new model
     CT_m = gb.Model("qp")
     CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
     # Create variables
-    p = np.array([CT_m.addVar(lb=Pmin_bal[t,i], ub=Pmax_bal[t,i]) for i in range(n) for k in range(uff)])
-    l = np.array([CT_m.addVar(lb=Lmin_bal[t+k,i], ub=Lmax_bal[t+k,i]) for i in range(n) for k in range(uff)])
+    p = np.array([CT_m.addVar(lb=Pmin_bal_resP[t,i], ub=Pmax_bal_resP[t,i]) for i in range(n) for k in range(uff)])
+    l = np.array([CT_m.addVar(lb=Lmin_bal_resP[t+k,i], ub=Lmax_bal_resP[t+k,i]) for i in range(n) for k in range(uff)])
     q_imp = np.array([CT_m.addVar() for k in range(uff)])
     q_exp = np.array([CT_m.addVar() for k in range(uff)])
     alfa = np.array([CT_m.addVar() for i in range(n) for k in range(uff)])
@@ -267,7 +244,7 @@ for t in np.arange(0,TMST_run,uff):  # for t = 0, 96
     beta = np.transpose(beta.reshape(n,uff))
     
     # Set objective: 
-    obj = (sum(sum(y0_c_bal[temp,:]*l + mm_c_bal[temp,:]/2*l*l) + sum(y0_g_bal[temp,:]*p + mm_g_bal[temp,:]/2*p*p)) 
+    obj = (sum(sum(y0_c_bal_resP[temp,:]*l + mm_c_bal_resP[temp,:]/2*l*l) + sum(y0_g_bal_resP[temp,:]*p + mm_g_bal_resP[temp,:]/2*p*p)) 
            + sum(gamma_i*q_imp + gamma_e*q_exp) + sum(0.001*sum(q_pos)))
     CT_m.setObjective(obj)
     
@@ -287,18 +264,18 @@ for t in np.arange(0,TMST_run,uff):  # for t = 0, 96
     CT_m.optimize()
     for k in range(uff):
         for i in range(n):
-            CT_price_sol_bal[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
-            CT_p_sol_bal[i,t+k] = p[k,i].x
-            CT_l_sol_bal[i,t+k] = l[k,i].x
-            CT_q_sol_bal[i,t+k] = q[k,i].x
-            CT_alfa_sol_bal[i,t+k] = alfa[k,i].x
-            CT_beta_sol_bal[i,t+k] = beta[k,i].x
-        CT_price2_sol_bal[0,t+k] = CT_m.getConstrByName("comm[%s]"%k).Pi
-        CT_price2_sol_bal[1,t+k] = CT_m.getConstrByName("imp_bal[%s]"%k).Pi
-        CT_price2_sol_bal[2,t+k] = CT_m.getConstrByName("exp_bal[%s]"%k).Pi
-        CT_imp_sol_bal[t+k] = q_imp[k].x
-        CT_exp_sol_bal[t+k] = q_exp[k].x
+            CT_price_sol_bal_resP[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
+            CT_p_sol_bal_resP[i,t+k] = p[k,i].x
+            CT_l_sol_bal_resP[i,t+k] = l[k,i].x
+            CT_q_sol_bal_resP[i,t+k] = q[k,i].x
+            CT_alfa_sol_bal_resP[i,t+k] = alfa[k,i].x
+            CT_beta_sol_bal_resP[i,t+k] = beta[k,i].x
+        CT_price2_sol_bal_resP[0,t+k] = CT_m.getConstrByName("comm[%s]"%k).Pi
+        CT_price2_sol_bal_resP[1,t+k] = CT_m.getConstrByName("imp_bal[%s]"%k).Pi
+        CT_price2_sol_bal_resP[2,t+k] = CT_m.getConstrByName("exp_bal[%s]"%k).Pi
+        CT_imp_sol_bal_resP[t+k] = q_imp[k].x
+        CT_exp_sol_bal_resP[t+k] = q_exp[k].x
 # http://www.gurobi.com/documentation/7.5/refman/attributes.html
     del CT_m
 
-CT_IE_sol_bal = CT_imp_sol_bal - CT_exp_sol_bal
+CT_IE_sol_bal_resP = CT_imp_sol_bal_resP - CT_exp_sol_bal_resP
