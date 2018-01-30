@@ -129,7 +129,7 @@ RES_UP = 0.8*np.ones(8760)
 #RES_UP = np.zeros(8760)
 #RES_UP = abs(imbalance_community)[1::4]        # reserve requirement - set depending on the average imbalance of the community each hour (dato temporaneo)
 RES_DW = RES_UP
-CR_UP = 0.005*np.ones([TMST_run,2*n])
+CR_UP = 0.005*np.ones([TMST_run,n])
 CR_DW = 0.005*np.ones([TMST_run,2*n])
 pi_res_UP = 0.05
 pi_res_DW = 0.05
@@ -158,10 +158,12 @@ for t in np.arange(0,TMST_run,uff):  # for t = 0, 24
     # Create variables
     p = np.array([CT_m_res.addVar() for i in range(n) for k in range(uff)])
     l = np.array([CT_m_res.addVar() for i in range(n) for k in range(uff)])
-    r_UP = np.array([CT_m_res.addVar() for i in range(2*n) for k in range(uff)])
-    r_DW = np.array([CT_m_res.addVar() for i in range(2*n) for k in range(uff)])
-    R_UP = np.array([CT_m_res.addVar() for i in range(2*n) for k in range(uff)])
-    R_DW = np.array([CT_m_res.addVar() for i in range(2*n) for k in range(uff)])
+    #r_UP = np.array([CT_m_res.addVar() for i in range(2*n) for k in range(uff)])
+    r_UP = np.array([CT_m_res.addVar() for i in range(n) for k in range(uff)])
+    #r_DW = np.array([CT_m_res.addVar() for i in range(2*n) for k in range(uff)])
+    #R_UP = np.array([CT_m_res.addVar() for i in range(2*n) for k in range(uff)])
+    R_UP = np.array([CT_m_res.addVar() for i in range(n) for k in range(uff)])
+    #R_DW = np.array([CT_m_res.addVar() for i in range(2*n) for k in range(uff)])
     q_imp = np.array([CT_m_res.addVar() for k in range(uff)])
     q_exp = np.array([CT_m_res.addVar() for k in range(uff)])
     alfa = np.array([CT_m_res.addVar() for i in range(n) for k in range(uff)])
@@ -178,18 +180,24 @@ for t in np.arange(0,TMST_run,uff):  # for t = 0, 24
     q_pos = np.transpose(q_pos.reshape(n,uff))
     alfa = np.transpose(alfa.reshape(n,uff))
     beta = np.transpose(beta.reshape(n,uff))
-    r_UP = np.transpose(r_UP.reshape(2*n,uff)) 
-    r_DW = np.transpose(r_DW.reshape(2*n,uff))
-    R_UP = np.transpose(R_UP.reshape(2*n,uff))
-    R_DW = np.transpose(R_DW.reshape(2*n,uff))
+    #r_UP = np.transpose(r_UP.reshape(2*n,uff)) 
+    r_UP = np.transpose(r_UP.reshape(n,uff)) 
+    #r_DW = np.transpose(r_DW.reshape(2*n,uff))
+    #R_UP = np.transpose(R_UP.reshape(2*n,uff))
+    R_UP = np.transpose(R_UP.reshape(n,uff))
+    #R_DW = np.transpose(R_DW.reshape(2*n,uff))
     
     # Set objective: 
-    obj = sum(sum(y0_c[temp,:]*(-l) + mm_c[temp,:]/2*(-l)*(-l)) + sum(y0_g[temp,:]*p + mm_g[temp,:]/2*p*p) +\
+    obj = sum(sum(y0_c[temp,:]*(-l) + mm_c[temp,:]/2*(-l)*(-l)) + sum(y0_g[temp,:]*p + mm_g[temp,:]/2*p*p)) +\
            sum(gamma_i*q_imp + gamma_e*q_exp) + sum(0.001*sum(q_pos)) +\
-           sum(sum(CR_UP[temp,:]*R_UP)) + sum(sum(CR_DW[temp,:]*R_DW)) +\
-           pi_res_UP*(sum(y0_c[temp,:]*(r_UP[:,n:]) + mm_c[temp,:]/2*(r_UP[:,n:])*(r_UP[:,n:])) + sum(y0_g[temp,:]*r_UP[:,:n] + mm_g[temp,:]/2*r_UP[:,:n]*r_UP[:,:n])) +\
-           pi_res_DW*(sum(y0_c[temp,:]*(-r_DW[:,n:]) + mm_c[temp,:]/2*(-r_DW[:,n:])*(-r_DW[:,n:])) + sum(y0_g[temp,:]*(-r_DW[:,:n]) + mm_g[temp,:]/2*(-r_DW[:,:n])*(-r_DW[:,:n]))))
-    CT_m_res.setObjective(obj)
+           sum(sum(CR_UP[temp,:]*R_UP)) +\
+           pi_res_UP*(sum(sum(y0_g[temp,:]*(r_UP) + mm_g[temp,:]/2*(r_UP)*(r_UP))))
+    CT_m_res.setObjective(obj)      
+#sum(sum(CR_DW[temp,:]*R_DW)) +\
+#pi_res_UP*(sum(y0_c[temp,:]*(r_UP[:,n:]) + mm_c[temp,:]/2*(r_UP[:,n:])*(r_UP[:,n:])) + sum(y0_g[temp,:]*r_UP[:,:n] + mm_g[temp,:]/2*r_UP[:,:n]*r_UP[:,:n])) +\
+#pi_res_DW*(sum(y0_c[temp,:]*(-r_DW[:,n:]) + mm_c[temp,:]/2*(-r_DW[:,n:])*(-r_DW[:,n:])) + sum(y0_g[temp,:]*(-r_DW[:,:n]) + mm_g[temp,:]/2*(-r_DW[:,:n])*(-r_DW[:,:n]))))
+    
+    
     
     # Add constraint
     for k in range(uff):
@@ -198,17 +206,20 @@ for t in np.arange(0,TMST_run,uff):  # for t = 0, 24
             CT_m_res.addConstr(q[k,i] <= q_pos[k,i])
             CT_m_res.addConstr(q[k,i] >= -q_pos[k,i])
             CT_m_res.addConstr(p[k,i] - PV[t+k,i] + R_UP[k,i] <= Pmax[i], name="R_UP_limit_p[%s,%s]"% (k,i))
-            CT_m_res.addConstr(p[k,i] - PV[t+k,i] - R_DW[k,i] >= Pmin[i], name="R_DW_limit_p[%s,%s]"% (k,i))
-            CT_m_res.addConstr(-l[k,i] + R_UP[k,i+n] <= Lmax[t+k,i], name="R_UP_limit_l[%s,%s]"% (k,i))
-            CT_m_res.addConstr(-l[k,i] - R_DW[k,i+n] >= Lmin[t+k,i], name="R_DW_limit_l[%s,%s]"% (k,i))
-        for i in range(2*n):
-            CT_m_res.addConstr(r_UP[k,i] - R_UP[k,i]== 0, name="r_UP_limit[%s,%s]"% (k,i))
-            CT_m_res.addConstr(r_DW[k,i] - R_DW[k,i]== 0, name="r_DW_limit[%s,%s]"% (k,i))
+            CT_m_res.addConstr(p[k,i] - PV[t+k,i] >= Pmin[i], name="R_DW_limit_p[%s,%s]"% (k,i))
+            #CT_m_res.addConstr(p[k,i] - PV[t+k,i] - R_DW[k,i] >= Pmin[i], name="R_DW_limit_p[%s,%s]"% (k,i))
+            #CT_m_res.addConstr(-l[k,i] + R_UP[k,i+n] <= Lmax[t+k,i], name="R_UP_limit_l[%s,%s]"% (k,i))
+            CT_m_res.addConstr(-l[k,i] <= Lmax[t+k,i], name="Lmax_l[%s,%s]"% (k,i))
+            CT_m_res.addConstr(-l[k,i] >= Lmin[t+k,i], name="Lmin_l[%s,%s]"% (k,i))
+            #CT_m_res.addConstr(-l[k,i] - R_DW[k,i+n] >= Lmin[t+k,i], name="R_DW_limit_l[%s,%s]"% (k,i))
+        #for i in range(2*n):
+            CT_m_res.addConstr(r_UP[k,i] - R_UP[k,i] == 0, name="r_UP_limit[%s,%s]"% (k,i))
+            #CT_m_res.addConstr(r_DW[k,i] - R_DW[k,i]<= 0, name="r_DW_limit[%s,%s]"% (k,i))
         CT_m_res.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k))
         CT_m_res.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
         CT_m_res.addConstr(sum(beta[k,:]) - q_exp[k] == 0, name="exp_bal[%s]"%(k))
         CT_m_res.addConstr(sum(r_UP[k,:]) - RES_UP[t+k] == 0, name="r_UP_requirement[%s]"%(k))
-        CT_m_res.addConstr(sum(r_DW[k,:]) - RES_DW[t+k] == 0, name="r_DW_requirement[%s]"%(k))
+        #CT_m_res.addConstr(sum(r_DW[k,:]) - RES_DW[t+k] == 0, name="r_DW_requirement[%s]"%(k))
         
     for i in range(n):         
         CT_m_res.addConstr(sum(Agg_load[temp,i] - l[:,i]) == 0)
@@ -223,11 +234,11 @@ for t in np.arange(0,TMST_run,uff):  # for t = 0, 24
             CT_q_sol_res[i,t+k] = q[k,i].x
             CT_alfa_sol_res[i,t+k] = alfa[k,i].x
             CT_beta_sol_res[i,t+k] = beta[k,i].x
-        for i in range(2*n):
+        #for i in range(2*n):
             CT_r_UP_sol_res[i,t+k] = r_UP[k,i].x
-            CT_r_DW_sol_res[i,t+k] = r_DW[k,i].x
+            #CT_r_DW_sol_res[i,t+k] = r_DW[k,i].x
             CT_R_UP_sol_res[i,t+k] = R_UP[k,i].x
-            CT_R_DW_sol_res[i,t+k] = R_DW[k,i].x
+            #CT_R_DW_sol_res[i,t+k] = R_DW[k,i].x
         CT_price2_sol_res[0,t+k] = CT_m_res.getConstrByName("comm[%s]"%k).Pi
         CT_price2_sol_res[1,t+k] = CT_m_res.getConstrByName("imp_bal[%s]"%k).Pi
         CT_price2_sol_res[2,t+k] = CT_m_res.getConstrByName("exp_bal[%s]"%k).Pi
@@ -246,3 +257,4 @@ for t in range(TMST_run):
 cost_res_tp_times4 = np.repeat(cost_res_tp, 4, axis=0)
 cost_res_p = np.sum(cost_res_tp_times4, axis=0)
 cost_res = np.sum(cost_res_p)
+

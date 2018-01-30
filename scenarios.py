@@ -11,7 +11,7 @@ import os
 #import gurobipy as gb
 import numpy as np
 import pandas as pd
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from pathlib import Path
 import shelve
 
@@ -107,9 +107,9 @@ average_imbal_community = np.average(imbalance_community)
 #==============================================================================
 # # BAL PRICES
 #==============================================================================
-el_price_DA = np.repeat(el_price_e, 4, axis=0)
-el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0) # 2 rows
-el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0) # 2 rows
+el_price_DA = np.repeat(el_price_e, 4, axis=0)/4
+el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0)/4 # 2 rows
+el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0)/4 # 2 rows
 
 system_state = np.empty([4*TMST])
 for t in range(4*TMST):
@@ -136,8 +136,8 @@ ret_price_imp = np.average(el_price_UP)
 #%% SCENARIO 1
 
 # imbalance costs
-imbal_cost_tp_1 = np.zeros([4*TMST,n])
-for t in range(4*TMST):
+imbal_cost_tp_1 = np.zeros([4*TMST_run,n])
+for t in range(4*TMST_run):
     for p in range(n):
         if (deltaPV[t,p]-deltaLoad[t,p]) < 0:
             imbal_cost_tp_1[t,p] = - ret_price_imp*(deltaPV[t,p]-deltaLoad[t,p])
@@ -148,8 +148,8 @@ imbal_cost_1 = np.sum(imbal_cost_tp_1)
 # cost/revenue for each prosumer compared to the Perfect Information
 costPercentage_p_1_case1 = np.zeros(n)
 for p in range(n):
-    costPercentage_p_1_case1[p] = (cost_DA_p[p]+imbal_cost_p_1[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
-costPercentage_1_case1 = (cost_DA + imbal_cost_1 - cost_DA_PI1)/cost_DA_PI1
+    costPercentage_p_1_case1[p] = abs(cost_DA_p[p]+imbal_cost_p_1[p]-cost_DA_PI1_p[p])/abs(cost_DA_PI1_p[p])
+costPercentage_1_case1 = abs(cost_DA + imbal_cost_1 - cost_DA_PI1)/abs(cost_DA_PI1)
 # QoE
 numerator_1 = -imbal_cost_tp_1
 denominator_1 = deltaPV - deltaLoad
@@ -161,8 +161,8 @@ QoE_1 = 1 - sigma_1/sigmaMax_1
 #%% SCENARIO 2 
 
 # imbalance costs
-imbal_cost_tp_2 = np.zeros([4*TMST,n])
-for t in range(4*TMST):
+imbal_cost_tp_2 = np.zeros([4*TMST_run,n])
+for t in range(4*TMST_run):
     for p in range(n):
         if system_state[t] == 0:
             imbal_cost_tp_2[t,p] = - el_price_DA[t]*(deltaPV[t,p]-deltaLoad[t,p])
@@ -181,8 +181,8 @@ imbal_cost_2 = np.sum(imbal_cost_tp_2)
 # cost/revenue for each prosumer compared to the Perfect Information
 costPercentage_p_2_case1 = np.zeros(n)
 for p in range(n):
-    costPercentage_p_2_case1[p] = (cost_DA_p[p]+imbal_cost_p_2[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
-costPercentage_2_case1 = (cost_DA + imbal_cost_2 - cost_DA_PI1)/cost_DA_PI1
+    costPercentage_p_2_case1[p] = abs(cost_DA_p[p]+imbal_cost_p_2[p]-cost_DA_PI1_p[p])/abs(cost_DA_PI1_p[p])
+costPercentage_2_case1 = abs(cost_DA + imbal_cost_2 - cost_DA_PI1)/abs(cost_DA_PI1)
 # QoE
 numerator_2 = -imbal_cost_tp_2
 denominator_2 = deltaPV - deltaLoad
@@ -194,14 +194,14 @@ QoE_2 = 1 - sigma_2/sigmaMax_2
 #%% SCENARIO 3
 
 # imbalance costs
-imbal_cost_t_3 = np.zeros([4*TMST])
-for t in range(4*TMST):
+imbal_cost_t_3 = np.zeros([4*TMST_run])
+for t in range(4*TMST_run):
     if imbalance_community[t] < 0:
         imbal_cost_t_3[t] = - (ret_price_imp)*(imbalance_community[t])
     else:
         imbal_cost_t_3[t] = - (ret_price_exp)*(imbalance_community[t])
-imbal_cost_tp_3 = np.ones([4*TMST,n])
-for t in range(4*TMST):
+imbal_cost_tp_3 = np.ones([4*TMST_run,n])
+for t in range(4*TMST_run):
     for p in range(n):
         imbal_cost_tp_3[t,p] = imbal_cost_t_3[t]/n
 imbal_cost_p_3 = np.sum(imbal_cost_tp_3, axis = 0)
@@ -212,8 +212,8 @@ imbal_cost_3 = np.sum(imbal_cost_t_3)
 # cost/revenue for each prosumer compared to the Perfect Information
 costPercentage_p_3_case1 = np.zeros(n)
 for p in range(n):
-    costPercentage_p_3_case1[p] = (cost_DA_p[p]+imbal_cost_p_3[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
-costPercentage_3_case1 = (cost_DA + imbal_cost_3 - cost_DA_PI1)/cost_DA_PI1
+    costPercentage_p_3_case1[p] = abs(cost_DA_p[p]+imbal_cost_p_3[p]-cost_DA_PI1_p[p])/abs(cost_DA_PI1_p[p])
+costPercentage_3_case1 = abs(cost_DA + imbal_cost_3 - cost_DA_PI1)/abs(cost_DA_PI1)
 # QoE
 numerator_3 = -imbal_cost_tp_3
 denominator_3 = deltaPV - deltaLoad
@@ -225,8 +225,8 @@ QoE_3 = 1 - sigma_3/sigmaMax_3
 #%% SCENARIO 4
 
 # imbalance costs
-imbal_cost_t_4 = np.zeros([4*TMST])
-for t in range(4*TMST):
+imbal_cost_t_4 = np.zeros([4*TMST_run])
+for t in range(4*TMST_run):
     if system_state[t] == 0:
             imbal_cost_t_4[t,p] = - el_price_DA[t]*imbalance_community[t]
     if system_state[t] == 1:
@@ -239,8 +239,8 @@ for t in range(4*TMST):
             imbal_cost_t_4[t] = - el_price_DA[t]*imbalance_community[t]
         else:
             imbal_cost_t_4[t] = - el_price_DW[t]*imbalance_community[t]
-imbal_cost_tp_4 = np.ones([4*TMST,n])
-for t in range(4*TMST):
+imbal_cost_tp_4 = np.ones([4*TMST_run,n])
+for t in range(4*TMST_run):
     for p in range(n):
         imbal_cost_tp_4[t,p] = imbal_cost_t_4[t]/n
 imbal_cost_p_4 = np.sum(imbal_cost_tp_4, axis = 0)
@@ -248,8 +248,8 @@ imbal_cost_4 = np.sum(imbal_cost_t_4)
 # cost/revenue for each prosumer compared to the Perfect Information
 costPercentage_p_4_case1 = np.zeros(n)
 for p in range(n):
-    costPercentage_p_4_case1[p] = (cost_DA_p[p]+imbal_cost_p_4[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
-costPercentage_4_case1 = (cost_DA + imbal_cost_4 - cost_DA_PI1)/cost_DA_PI1
+    costPercentage_p_4_case1[p] = abs(cost_DA_p[p]+imbal_cost_p_4[p]-cost_DA_PI1_p[p])/abs(cost_DA_PI1_p[p])
+costPercentage_4_case1 = abs(cost_DA + imbal_cost_4 - cost_DA_PI1)/abs(cost_DA_PI1)
 # QoE
 numerator_4 = -imbal_cost_tp_4
 denominator_4 = deltaPV - deltaLoad
@@ -277,8 +277,8 @@ imbal_cost_5 = np.sum(imbal_cost_p_5)
 # cost/revenue for each prosumer compared to the Perfect Information
 costPercentage_p_5_case1 = np.zeros(n)
 for p in range(n):
-    costPercentage_p_5_case1[p] = (cost_DA_p[p]+imbal_cost_p_5[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
-costPercentage_5_case1 = (cost_DA + imbal_cost_5 - cost_DA_PI1)/cost_DA_PI1
+    costPercentage_p_5_case1[p] = abs(cost_DA_p[p]+imbal_cost_p_5[p]-cost_DA_PI1_p[p])/abs(cost_DA_PI1_p[p])
+costPercentage_5_case1 = abs(cost_DA + imbal_cost_5 - cost_DA_PI1)/abs(cost_DA_PI1)
 # QoE
 perceived_price_5 = np.sum(numerator_5, axis = 0)/np.sum(denominator_5, axis = 0)
 sigma_5 = np.std(perceived_price_5)
@@ -319,39 +319,39 @@ sigmaMax_6 = max(perceived_price_6) - min(perceived_price_6)
 QoE_6 = 1 - sigma_6/sigmaMax_6
 
 #%% SCENARIO 6 - res
-from CT_bal6res import (CT_price2_sol_bal, CT_q_sol_bal, CT_beta_sol_bal, 
-CT_alfa_sol_bal, CT_l_sol_bal, CT_p_sol_bal, mm_c_bal, mm_g_bal, y0_c_bal, y0_g_bal)
-from CT_res import cost_res_p, cost_res
-# imbalance costs
-imbal_cost_tp_6res = np.empty([4*TMST_run,n])
-numerator_6res = np.empty([4*TMST_run,n])
-denominator_6res = np.empty([4*TMST_run,n])
-for t in range(4*TMST_run):
-    for p in range(n):
-        if system_state[t] == 2:
-            imbal_cost_tp_6res[t,p] = (-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DW[t] + CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
-            y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-        elif system_state[t] == 1:
-            imbal_cost_tp_6res[t,p] = (-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DA[t] + CT_alfa_sol_bal[p,t]*el_price_UP[t] + \
-            y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-        else:
-            imbal_cost_tp_6res[t,p] = (-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DA[t] + CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
-            y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
-        numerator_6res[t,p] = -(-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_DW[t] - CT_alfa_sol_bal[p,t]*el_price_UP[t]
-        denominator_6res[t,p] = CT_beta_sol_bal[p,t] - CT_alfa_sol_bal[p,t] - CT_q_sol_bal[p,t]
-imbal_cost_p_6res= np.sum(imbal_cost_tp_6res, axis=0)
-imbal_cost_6res= np.sum(imbal_cost_p_6res)
-imbal_cost_p_perunit_imbal_6res = -abs(imbal_cost_p_6res)/imbalance_prosumer
-# QoE
-perceived_price_6res = np.sum(numerator_6res, axis = 0)/np.sum(denominator_6res, axis = 0)
-sigma_6res = np.std(perceived_price_6res)
-sigmaMax_6res = max(perceived_price_6res) - min(perceived_price_6res)
-QoE_6res = 1 - sigma_6res/sigmaMax_6res
-# cost/revenue for each prosumer compared to the Perfect Information
-costPercentage_p_6res_case1 = np.zeros(n)
-for p in range(n):
-    costPercentage_p_6res_case1[p] = (cost_res_p[p]+imbal_cost_p_6res[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
-costPercentage_6res_case1 = (cost_res + imbal_cost_6res - cost_DA_PI1)/cost_DA_PI1
+#from CT_bal6res import (CT_price2_sol_bal, CT_q_sol_bal, CT_beta_sol_bal, 
+#CT_alfa_sol_bal, CT_l_sol_bal, CT_p_sol_bal, mm_c_bal, mm_g_bal, y0_c_bal, y0_g_bal)
+#from CT_res import cost_res_p, cost_res
+## imbalance costs
+#imbal_cost_tp_6res = np.empty([4*TMST_run,n])
+#numerator_6res = np.empty([4*TMST_run,n])
+#denominator_6res = np.empty([4*TMST_run,n])
+#for t in range(4*TMST_run):
+#    for p in range(n):
+#        if system_state[t] == 2:
+#            imbal_cost_tp_6res[t,p] = (-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DW[t] + CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
+#            y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+#        elif system_state[t] == 1:
+#            imbal_cost_tp_6res[t,p] = (-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DA[t] + CT_alfa_sol_bal[p,t]*el_price_UP[t] + \
+#            y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+#        else:
+#            imbal_cost_tp_6res[t,p] = (-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) - CT_beta_sol_bal[p,t]*el_price_DA[t] + CT_alfa_sol_bal[p,t]*el_price_DA[t] + \
+#            y0_c_bal[t,p]*CT_l_sol_bal[p,t] + mm_c_bal[t,p]/2*CT_l_sol_bal[p,t]*CT_l_sol_bal[p,t] + y0_g_bal[t,p]*CT_p_sol_bal[p,t] + mm_g_bal[t,p]/2*CT_p_sol_bal[p,t]*CT_p_sol_bal[p,t]
+#        numerator_6res[t,p] = -(-CT_price2_sol_bal[0,t])*(CT_q_sol_bal[p,t]) + CT_beta_sol_bal[p,t]*el_price_DW[t] - CT_alfa_sol_bal[p,t]*el_price_UP[t]
+#        denominator_6res[t,p] = CT_beta_sol_bal[p,t] - CT_alfa_sol_bal[p,t] - CT_q_sol_bal[p,t]
+#imbal_cost_p_6res= np.sum(imbal_cost_tp_6res, axis=0)
+#imbal_cost_6res= np.sum(imbal_cost_p_6res)
+#imbal_cost_p_perunit_imbal_6res = -abs(imbal_cost_p_6res)/imbalance_prosumer
+## QoE
+#perceived_price_6res = np.sum(numerator_6res, axis = 0)/np.sum(denominator_6res, axis = 0)
+#sigma_6res = np.std(perceived_price_6res)
+#sigmaMax_6res = max(perceived_price_6res) - min(perceived_price_6res)
+#QoE_6res = 1 - sigma_6res/sigmaMax_6res
+## cost/revenue for each prosumer compared to the Perfect Information
+#costPercentage_p_6res_case1 = np.zeros(n)
+#for p in range(n):
+#    costPercentage_p_6res_case1[p] = (cost_res_p[p]+imbal_cost_p_6res[p]-cost_DA_PI1_p[p])/cost_DA_PI1_p[p]
+#costPercentage_6res_case1 = (cost_res + imbal_cost_6res - cost_DA_PI1)/cost_DA_PI1
 
 #%% SCENARIO 6 - resP
 from CT_bal6resP import (CT_price2_sol_bal, CT_q_sol_bal, CT_beta_sol_bal, 
@@ -389,10 +389,71 @@ QoE_6resP = 1 - sigma_6resP/sigmaMax_6resP
 
 #%% save results in DataFrame
 
-percentage_costs_p = pd.DataFrame(np.array([costPercentage_p_1_case1,costPercentage_p_2_case1,costPercentage_p_3_case1,costPercentage_p_4_case1,costPercentage_p_5_case1,costPercentage_p_6_case1,costPercentage_p_6res_case1,costPercentage_p_6resP_case1]).T, columns=['costPercentage s1','costPercentage s2','costPercentage s3','costPercentage s4','costPercentage s5','costPercentage s6','costPercentage s6res','costPercentage s6resP'])
-percentage_costs = pd.DataFrame(np.array([costPercentage_1_case1,costPercentage_2_case1,costPercentage_3_case1,costPercentage_4_case1,costPercentage_5_case1,costPercentage_6_case1,costPercentage_6res_case1,costPercentage_6resP_case1]).reshape(1,-1), columns=['costPercentage s1','costPercentage s2','costPercentage s3','costPercentage s4','costPercentage s5','costPercentage s6','costPercentage s6res','costPercentage s6resP'])
+percentage_costs_p = pd.DataFrame(np.array([costPercentage_p_1_case1,costPercentage_p_2_case1,costPercentage_p_3_case1,costPercentage_p_4_case1,costPercentage_p_5_case1,costPercentage_p_6_case1,costPercentage_p_6resP_case1]).T, columns=['costPercentage s1','costPercentage s2','costPercentage s3','costPercentage s4','costPercentage s5','costPercentage s6','costPercentage s6resP'])
+percentage_costs = pd.DataFrame(np.array([costPercentage_1_case1,costPercentage_2_case1,costPercentage_3_case1,costPercentage_4_case1,costPercentage_5_case1,costPercentage_6_case1,costPercentage_6resP_case1]).reshape(1,-1), columns=['costPercentage s1','costPercentage s2','costPercentage s3','costPercentage s4','costPercentage s5','costPercentage s6','costPercentage s6resP'])
 
-imbal_costs = pd.DataFrame(np.array([imbal_cost_1,imbal_cost_2,imbal_cost_3,imbal_cost_4,imbal_cost_5,imbal_cost_6,imbal_cost_6res,imbal_cost_6resP]).reshape(1,-1), columns=['imbal cost s1','imbal cost s2','imbal cost s3','imbal cost s4','imbal cost s5','imbal cost s6','imbal cost s6res','imbal cost s6resP'])
-imbal_costs_p = pd.DataFrame(np.array([imbal_cost_p_1,imbal_cost_p_2,imbal_cost_p_3,imbal_cost_p_4,imbal_cost_p_5,imbal_cost_p_6,imbal_cost_p_6res,imbal_cost_p_6resP]).T, columns=['imbal cost s1','imbal cost s2','imbal cost s3','imbal cost s4','imbal cost s5','imbal cost s6','imbal cost s6res','imbal cost s6resP'])
+imbal_costs = pd.DataFrame(np.array([imbal_cost_1,imbal_cost_2,imbal_cost_3,imbal_cost_4,imbal_cost_5,imbal_cost_6,imbal_cost_6resP]).reshape(1,-1), columns=['imbal cost s1','imbal cost s2','imbal cost s3','imbal cost s4','imbal cost s5','imbal cost s6','imbal cost s6resP'])
+imbal_costs_p = pd.DataFrame(np.array([imbal_cost_p_1,imbal_cost_p_2,imbal_cost_p_3,imbal_cost_p_4,imbal_cost_p_5,imbal_cost_p_6,imbal_cost_p_6resP]).T, columns=['imbal cost s1','imbal cost s2','imbal cost s3','imbal cost s4','imbal cost s5','imbal cost s6','imbal cost s6resP'])
 
-QoE = pd.DataFrame(np.array([QoE_1,QoE_2,QoE_3,QoE_4,QoE_5,QoE_6,QoE_6res,QoE_6resP]).reshape(1,-1), columns=['imbal cost s1','imbal cost s2','imbal cost s3','imbal cost s4','imbal cost s5','imbal cost s6','imbal cost s6res','imbal cost s6resP'])
+QoE = pd.DataFrame(np.array([QoE_1,QoE_2,QoE_3,QoE_4,QoE_5,QoE_6,QoE_6resP]).reshape(1,-1), columns=['imbal cost s1','imbal cost s2','imbal cost s3','imbal cost s4','imbal cost s5','imbal cost s6','imbal cost s6resP'])
+
+#%% pictures
+
+# imbalance costs per prosumer accross scenarios
+fig_imbalCost_p = plt.figure(1,figsize=[10,6])
+ax1, = plt.plot(imbal_cost_p_1,label='scenario 1F')
+ax2, = plt.plot(imbal_cost_p_2,label='scenario 1D')
+ax3, = plt.plot(imbal_cost_p_3,label='scenario 2F')
+ax4, = plt.plot(imbal_cost_p_4,label='scenario 2D')
+ax5, = plt.plot(imbal_cost_p_5,label='scenario 3F',linestyle='dashed')
+ax6, = plt.plot(imbal_cost_p_6,label='scenario 3D',linestyle='dashed')
+plt.legend([ax1, ax2, ax3, ax4, ax5, ax6], ['scenario 1F', 'scenario 1D','scenario 2F', 'scenario 2D','scenario 3F', 'scenario 3D'])
+plt.xlabel('prosumer index')
+plt.ylabel('balancing cost[AUD/kWh]')
+plt.title('balancing cost per prosumer across scenarios')
+plt.savefig('figures/imbalCost_p_scenarios.png', bbox_inches='tight')
+
+# percentage deviation costs per prosumer accross scenarios
+fig_percCost_p = plt.figure(2,figsize=[10,6])
+ax1, = plt.plot(costPercentage_p_1_case1,label='scenario 1F')
+ax2, = plt.plot(costPercentage_p_2_case1,label='scenario 1D')
+ax3, = plt.plot(costPercentage_p_3_case1,label='scenario 2F')
+ax4, = plt.plot(costPercentage_p_4_case1,label='scenario 2D')
+ax5, = plt.plot(costPercentage_p_5_case1,label='scenario 3F',linestyle='dashed')
+ax6, = plt.plot(costPercentage_p_6_case1,label='scenario 3D',linestyle='dashed')
+plt.legend([ax1, ax2, ax3, ax4, ax5, ax6], ['scenario 1F', 'scenario 1D','scenario 2F', 'scenario 2D','scenario 3F', 'scenario 3D'])
+plt.xlabel('prosumer index')
+plt.ylabel('deviation costs [%]')
+plt.title('Percentage deviation costs from perfect information per prosumer across scenarios')
+plt.savefig('figures/percCost_p_scenarios.png', bbox_inches='tight')
+
+# total imbalance costs accross scenarios
+imbal_cost_135 = np.array((imbal_cost_1,imbal_cost_3,imbal_cost_5))
+imbal_cost_246 = np.array((imbal_cost_2,imbal_cost_4,imbal_cost_6))
+xlab = ['Scenario 1','Scenario 2','Scenario 3']
+tot_cost = plt.figure(3,figsize=[10,6])
+ax = tot_cost.add_subplot(111)
+res = pd.DataFrame([imbal_cost_135, imbal_cost_246],index=['Fixed tariff', 'Dynamic tariff'],columns=xlab).transpose()
+df_plot = pd.DataFrame([imbal_cost_135, imbal_cost_246],index=['Fixed tariff', 'Dynamic tariff'],columns=xlab).transpose()
+df_plot.plot(kind='bar',ax=ax)
+plt.xticks(rotation=360)
+plt.ylabel('Total imbalance costs [AUD/kWh]')
+plt.tight_layout()
+plt.grid()
+plt.savefig('figures/total_imbal_barchart.png', bbox_inches='tight')
+
+# percentage costs accross scenarios per prosumer
+perc_cost_135 = np.array((costPercentage_1_case1,costPercentage_3_case1,costPercentage_5_case1))
+perc_cost_246 = np.array((costPercentage_2_case1,costPercentage_4_case1,costPercentage_6_case1))
+xlab = ['Scenario 1','Scenario 2','Scenario 3']
+tot_cost = plt.figure(4,figsize=[10,6])
+ax = tot_cost.add_subplot(111)
+res = pd.DataFrame([perc_cost_135, perc_cost_246],index=['Fixed tariff', 'Dynamic tariff'],columns=xlab).transpose()
+df_plot = pd.DataFrame([perc_cost_135, perc_cost_246],index=['Fixed tariff', 'Dynamic tariff'],columns=xlab).transpose()
+df_plot.plot(kind='bar',ax=ax)
+plt.xticks(rotation=360)
+plt.ylabel('Cost deviation from perfect information (DA + BAL) [AUD/kWh]')
+plt.tight_layout()
+plt.grid()
+plt.savefig('figures/total_perc_barchart.png', bbox_inches='tight')
+

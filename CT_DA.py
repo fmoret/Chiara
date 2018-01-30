@@ -11,7 +11,7 @@ import pandas as pd
 #import matplotlib.pyplot as plt
 from pathlib import Path
 import shelve
-from TMST_def import TMST_run
+from TMST_def import TMST_run, n_days
 
 dd1 = os.getcwd() #os.path.realpath(__file__) #os.getcwd()
 data_path = str(Path(dd1).parent.parent)+r'\trunk\Input Data 2'
@@ -77,7 +77,6 @@ y0_g[np.isnan(y0_g)] = 0        # se non produco il mio costo è 0
 mm_g[np.isnan(mm_g)] = 0
      
 
-
 #%% Community CENTRALIZED solution
 #TMST = 8760
 CT_p_sol = np.zeros((g,TMST_run))
@@ -90,31 +89,31 @@ CT_exp_sol = np.zeros(TMST_run)
 CT_obj_sol = np.zeros(TMST_run)
 CT_price_sol = np.zeros((n,TMST_run))
 CT_price2_sol = np.zeros((3,TMST_run))
-
-for t in np.arange(0,TMST_run,24):  # for t = 0, 24
-    temp = range(t,t+24)
+uff = np.int32(24*n_days)
+for t in np.arange(0,TMST_run,uff):  # for t = 0, 24
+    temp = range(t,t+uff)
     # Create a new model
     CT_m = gb.Model("qp")
     #CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
     # Create variables
-    p = np.array([CT_m.addVar(lb=Pmin[i]+PV[t+k,i], ub=Pmax[i]+PV[t+k,i]) for i in range(n) for k in range(24)])
-    l = np.array([CT_m.addVar(lb=Lmin[t+k,i], ub=Lmax[t+k,i]) for i in range(n) for k in range(24)])
-    q_imp = np.array([CT_m.addVar() for k in range(24)])
-    q_exp = np.array([CT_m.addVar() for k in range(24)])
-    alfa = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-    beta = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-    q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(24)])
-    q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(24)]) 
+    p = np.array([CT_m.addVar(lb=Pmin[i]+PV[t+k,i], ub=Pmax[i]+PV[t+k,i]) for i in range(n) for k in range(uff)])
+    l = np.array([CT_m.addVar(lb=Lmin[t+k,i], ub=Lmax[t+k,i]) for i in range(n) for k in range(uff)])
+    q_imp = np.array([CT_m.addVar() for k in range(uff)])
+    q_exp = np.array([CT_m.addVar() for k in range(uff)])
+    alfa = np.array([CT_m.addVar() for i in range(n) for k in range(uff)])
+    beta = np.array([CT_m.addVar() for i in range(n) for k in range(uff)])
+    q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(uff)])
+    q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(uff)]) 
     gamma_i = (el_price_e[temp] + 0.1)
     gamma_e = -el_price_e[temp]
     CT_m.update()
     
-    p = np.transpose(p.reshape(n,24))
-    l = np.transpose(l.reshape(n,24))
-    q = np.transpose(q.reshape(n,24))
-    q_pos = np.transpose(q_pos.reshape(n,24))
-    alfa = np.transpose(alfa.reshape(n,24))
-    beta = np.transpose(beta.reshape(n,24))
+    p = np.transpose(p.reshape(n,uff))
+    l = np.transpose(l.reshape(n,uff))
+    q = np.transpose(q.reshape(n,uff))
+    q_pos = np.transpose(q_pos.reshape(n,uff))
+    alfa = np.transpose(alfa.reshape(n,uff))
+    beta = np.transpose(beta.reshape(n,uff))
     
     # Set objective: 
     obj = (sum(sum(y0_c[temp,:]*l + mm_c[temp,:]/2*l*l) + sum(y0_g[temp,:]*p + mm_g[temp,:]/2*p*p)) 
@@ -123,7 +122,7 @@ for t in np.arange(0,TMST_run,24):  # for t = 0, 24
     CT_m.setObjective(obj)
     
     # Add constraint
-    for k in range(24):
+    for k in range(uff):
         CT_m.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k)) #somma sui prosumer
         #what about mettere una variabile invece che 0? da minimizzare poi nell'obj
         for i in range(n): #balance per ogni prosumer, ogni ora
@@ -132,12 +131,14 @@ for t in np.arange(0,TMST_run,24):  # for t = 0, 24
             CT_m.addConstr(q[k,i] >= -q_pos[k,i])
         CT_m.addConstr(sum(alfa[k,:]) - q_imp[k] == 0, name="imp_bal[%s]"%(k))
         CT_m.addConstr(sum(beta[k,:]) - q_exp[k] == 0, name="exp_bal[%s]"%(k))
-    for i in range(n): 
-        CT_m.addConstr(sum(Agg_load[temp,i] + l[:,i]) == 0)
-    CT_m.update()    
+    
+    if n_days == 1:
+        for i in range(n): 
+            CT_m.addConstr(sum(Agg_load[temp,i] + l[:,i]) == 0)
+        CT_m.update()    
         
     CT_m.optimize()
-    for k in range(24):
+    for k in range(uff):
         for i in range(n):
             CT_price_sol[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
             CT_p_sol[i,t+k] = p[k,i].x
@@ -160,8 +161,8 @@ cost_DA_tp = np.zeros([TMST_run,n])
 for t in range(TMST_run):
     for p in range(n):
         cost_DA_tp[t,p] = y0_c[t,p]*CT_l_sol[p,t] + mm_c[t,p]/2*CT_l_sol[p,t]*CT_l_sol[p,t] + y0_g[t,p]*CT_p_sol[p,t] + mm_g[t,p]/2*CT_p_sol[p,t]*CT_p_sol[p,t]+\
-                          CT_alfa_sol[p,t]*CT_imp_sol[t] + CT_beta_sol[p,t]*CT_exp_sol[t] + (-CT_price2_sol[0,t])*(CT_q_sol[p,t])
+                          CT_alfa_sol[p,t]*(el_price_e[t]+0.1) + CT_beta_sol[p,t]*(-el_price_e[t]) + (-CT_price2_sol[0,t])*(CT_q_sol[p,t])
 
-cost_DA_tp_times4 = np.repeat(cost_DA_tp, 4, axis=0)
-cost_DA_p = np.sum(cost_DA_tp_times4, axis=0)
+#cost_DA_tp_times4 = np.repeat(cost_DA_tp, 4, axis=0)
+cost_DA_p = np.sum(cost_DA_tp, axis=0)
 cost_DA = np.sum(cost_DA_p)

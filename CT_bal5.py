@@ -12,7 +12,7 @@ import pandas as pd
 #import matplotlib.pyplot as plt
 from pathlib import Path
 import shelve
-from TMST_def import TMST, TMST_run
+from TMST_def import TMST, TMST_run, n_days
 
 dd1 = os.getcwd()
 data_path = str(Path(dd1).parent.parent)+r'\trunk\Input Data 2'
@@ -202,9 +202,9 @@ mm_g_bal = mm_g_DA
 # PRICES
 #==============================================================================
 
-el_price_DA = np.repeat(el_price_e, 4, axis=0)
-el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0) # 2 rows
-el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0) # 2 rows
+el_price_DA = np.repeat(el_price_e, 4, axis=0)/4
+el_price_DW = np.repeat(el_price_sampled[:,0], 4, axis=0)/4 # 2 rows
+el_price_UP = np.repeat(el_price_sampled[:,2], 4, axis=0)/4
 
 system_state = np.empty([4*TMST])
 for t in range(4*TMST):
@@ -240,30 +240,31 @@ CT_obj_sol_bal = np.zeros(4*TMST_run)
 CT_price_sol_bal = np.zeros((n,4*TMST_run))
 CT_price2_sol_bal = np.zeros((3,4*TMST_run))
 
-for t in np.arange(0,4*TMST_run,96):  # for t = 0, 24
-    temp = range(t,t+96)
+uff = np.int32(96*n_days)
+for t in np.arange(0,TMST_run,uff):  # for t = 0, 96
+    temp = range(t,t+uff)
     # Create a new model
     CT_m = gb.Model("qp")
     #CT_m.setParam( 'OutputFlag', False ) # Quieting Gurobi output
     # Create variables
-    p = np.array([CT_m.addVar(lb=Pmin_bal[t,i], ub=Pmax_bal[t,i]) for i in range(n) for k in range(96)])
-    l = np.array([CT_m.addVar(lb=Lmin_bal[t+k,i], ub=Lmax_bal[t+k,i]) for i in range(n) for k in range(96)])
-    q_imp = np.array([CT_m.addVar() for k in range(96)])
-    q_exp = np.array([CT_m.addVar() for k in range(96)])
-    alfa = np.array([CT_m.addVar() for i in range(n) for k in range(96)])
-    beta = np.array([CT_m.addVar() for i in range(n) for k in range(96)])
-    q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(96)])
-    q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(96)]) 
+    p = np.array([CT_m.addVar(lb=Pmin_bal[t,i], ub=Pmax_bal[t,i]) for i in range(n) for k in range(uff)])
+    l = np.array([CT_m.addVar(lb=Lmin_bal[t+k,i], ub=Lmax_bal[t+k,i]) for i in range(n) for k in range(uff)])
+    q_imp = np.array([CT_m.addVar() for k in range(uff)])
+    q_exp = np.array([CT_m.addVar() for k in range(uff)])
+    alfa = np.array([CT_m.addVar() for i in range(n) for k in range(uff)])
+    beta = np.array([CT_m.addVar() for i in range(n) for k in range(uff)])
+    q_pos = np.array([CT_m.addVar() for i in range(n) for k in range(uff)])
+    q = np.array([CT_m.addVar(lb = -gb.GRB.INFINITY) for i in range(n) for k in range(uff)]) 
     gamma_i = ret_price_imp*np.ones(4*TMST_run)[temp]
     gamma_e = -ret_price_exp*np.ones(4*TMST_run)[temp]      
     CT_m.update()
     
-    p = np.transpose(p.reshape(n,96))
-    l = np.transpose(l.reshape(n,96))
-    q = np.transpose(q.reshape(n,96))
-    q_pos = np.transpose(q_pos.reshape(n,96))
-    alfa = np.transpose(alfa.reshape(n,96))
-    beta = np.transpose(beta.reshape(n,96))
+    p = np.transpose(p.reshape(n,uff))
+    l = np.transpose(l.reshape(n,uff))
+    q = np.transpose(q.reshape(n,uff))
+    q_pos = np.transpose(q_pos.reshape(n,uff))
+    alfa = np.transpose(alfa.reshape(n,uff))
+    beta = np.transpose(beta.reshape(n,uff))
     
     # Set objective: 
     obj = (sum(sum(y0_c_bal[temp,:]*l + mm_c_bal[temp,:]/2*l*l) + sum(y0_g_bal[temp,:]*p + mm_g_bal[temp,:]/2*p*p)) 
@@ -271,7 +272,7 @@ for t in np.arange(0,4*TMST_run,96):  # for t = 0, 24
     CT_m.setObjective(obj)
     
     # Add constraint
-    for k in range(96):
+    for k in range(uff):
         CT_m.addConstr(sum(q[k,:]) == 0, name="comm[%s]"%(k))
         for i in range(n): 
             CT_m.addConstr(p[k,i] + l[k,i] + q[k,i] + alfa[k,i] - beta[k,i] + deltaPV[k,i] - deltaLoad[k,i] == 0, name="pros[%s,%s]"% (k,i))
@@ -284,7 +285,7 @@ for t in np.arange(0,4*TMST_run,96):  # for t = 0, 24
     CT_m.update()    
         
     CT_m.optimize()
-    for k in range(96):
+    for k in range(uff):
         for i in range(n):
             CT_price_sol_bal[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
             CT_p_sol_bal[i,t+k] = p[k,i].x

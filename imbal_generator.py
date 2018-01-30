@@ -10,10 +10,10 @@ t = 8760
 n = 15
 
 # create noise for PV (only if PV nonzero) 
-noise_PV_DA = np.random.normal(0,0.1,(t,n))
+noise_PV_DA = np.random.normal(0,0.3,(t,n))
 
 # create noise for Load
-noise_Load_DA = np.random.normal(0,0.1,(t,n))
+noise_Load_DA = np.random.normal(0,0.3,(t,n))
 
 
 np.savetxt("noise_PV_DA.csv", noise_PV_DA , delimiter=",")
