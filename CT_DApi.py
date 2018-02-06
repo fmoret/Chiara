@@ -201,13 +201,21 @@ for t in np.arange(0,TMST_run,uff):  # for t = 0, 24
 
 CT_IE_sol_PI = CT_imp_sol_PI - CT_exp_sol_PI
 
+W_DA_PI1_tp = np.zeros([TMST_run,n]) 
+for t in range(TMST_run):
+    for p in range(n):
+        W_DA_PI1_tp[t,p] =CT_alfa_sol_PI[p,t]*(el_price_e[t] + 0.1) + CT_beta_sol_PI[p,t]*(-el_price_e[t])  +\
+        y0_c_PI[t,p]*CT_l_sol_PI[p,t] + mm_c_PI[t,p]/2*CT_l_sol_PI[p,t]*CT_l_sol_PI[p,t] + y0_g[t,p]*CT_p_sol_PI[p,t] + mm_g[t,p]/2*CT_p_sol_PI[p,t]*CT_p_sol_PI[p,t]+\
+                          + (-CT_price2_sol_PI[0,t])*CT_q_sol_PI[p,t]
+        #CT_alfa_sol_PI[p,t]*(-CT_price2_sol_PI[2,t]) + CT_beta_sol_PI[p,t]*(-CT_price2_sol_PI[1,t]) + (-CT_price2_sol_PI[0,t])*CT_q_sol_PI[p,t]
+W_DA_PI1_p = np.sum(W_DA_PI1_tp, axis=0)
+W_DA_PI1 = np.sum(W_DA_PI1_p)
+
 cost_DA_PI1_tp = np.zeros([TMST_run,n]) 
 for t in range(TMST_run):
     for p in range(n):
-        cost_DA_PI1_tp[t,p] = y0_c_PI[t,p]*CT_l_sol_PI[p,t] + mm_c_PI[t,p]/2*CT_l_sol_PI[p,t]*CT_l_sol_PI[p,t] + y0_g[t,p]*CT_p_sol_PI[p,t] + mm_g[t,p]/2*CT_p_sol_PI[p,t]*CT_p_sol_PI[p,t]+\
-                          CT_alfa_sol_PI[p,t]*(el_price_e[t] + 0.1) + CT_beta_sol_PI[p,t]*(-el_price_e[t]) + (-CT_price2_sol_PI[0,t])*CT_q_sol_PI[p,t]
-        #CT_alfa_sol_PI[p,t]*(-CT_price2_sol_PI[2,t]) + CT_beta_sol_PI[p,t]*(-CT_price2_sol_PI[1,t]) + (-CT_price2_sol_PI[0,t])*CT_q_sol_PI[p,t]
-
+        cost_DA_PI1_tp[t,p] = + (-CT_price2_sol_PI[0,t])*CT_q_sol_PI[p,t] + CT_alfa_sol_PI[p,t]*(el_price_e[t] + 0.1) + CT_beta_sol_PI[p,t]*(-el_price_e[t])
+        
 from CT_DA import cost_DA_tp, CT_price2_sol
 
 cost_DA_PI2_tp = np.zeros([TMST_run,n]) 

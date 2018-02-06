@@ -157,11 +157,20 @@ for t in np.arange(0,TMST_run,uff):  # for t = 0, 24
 CT_IE_sol = CT_imp_sol - CT_exp_sol
 
 
+W_DA_tp = np.zeros([TMST_run,n]) 
+for t in range(TMST_run):
+    for p in range(n):
+        W_DA_tp[t,p] = CT_alfa_sol[p,t]*(el_price_e[t]+0.1) + CT_beta_sol[p,t]*(-el_price_e[t]) +\
+        y0_c[t,p]*CT_l_sol[p,t] + mm_c[t,p]/2*CT_l_sol[p,t]*CT_l_sol[p,t] + y0_g[t,p]*CT_p_sol[p,t] + mm_g[t,p]/2*CT_p_sol[p,t]*CT_p_sol[p,t]+\
+                           + (-CT_price2_sol[0,t])*(CT_q_sol[p,t])
+
+W_DA_p = np.sum(W_DA_tp, axis=0)
+W_DA = np.sum(W_DA_p)
+
 cost_DA_tp = np.zeros([TMST_run,n]) 
 for t in range(TMST_run):
     for p in range(n):
-        cost_DA_tp[t,p] = y0_c[t,p]*CT_l_sol[p,t] + mm_c[t,p]/2*CT_l_sol[p,t]*CT_l_sol[p,t] + y0_g[t,p]*CT_p_sol[p,t] + mm_g[t,p]/2*CT_p_sol[p,t]*CT_p_sol[p,t]+\
-                          CT_alfa_sol[p,t]*(el_price_e[t]+0.1) + CT_beta_sol[p,t]*(-el_price_e[t]) + (-CT_price2_sol[0,t])*(CT_q_sol[p,t])
+        cost_DA_tp[t,p] = + (-CT_price2_sol[0,t])*(CT_q_sol[p,t]) + CT_alfa_sol[p,t]*(el_price_e[t]+0.1) + CT_beta_sol[p,t]*(-el_price_e[t])
 
 #cost_DA_tp_times4 = np.repeat(cost_DA_tp, 4, axis=0)
 cost_DA_p = np.sum(cost_DA_tp, axis=0)

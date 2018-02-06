@@ -206,16 +206,16 @@ ret_price_imp = np.average(el_price_UP)
 
 #%% Centralized COMMUNITY BALANCING scenario 5
 
-CT_p_sol_bal = np.zeros((g,TMST_run))
-CT_l_sol_bal = np.zeros((n,TMST_run))
-CT_q_sol_bal = np.zeros((n,TMST_run))
-CT_alfa_sol_bal = np.zeros((n,TMST_run))
-CT_beta_sol_bal = np.zeros((n,TMST_run))
-CT_imp_sol_bal = np.zeros(TMST_run)
-CT_exp_sol_bal = np.zeros(TMST_run)
-CT_obj_sol_bal = np.zeros(TMST_run)
-CT_price_sol_bal = np.zeros((n,TMST_run))
-CT_price2_sol_bal = np.zeros((3,TMST_run))
+CT_p_sol_bal5 = np.zeros((g,TMST_run))
+CT_l_sol_bal5 = np.zeros((n,TMST_run))
+CT_q_sol_bal5 = np.zeros((n,TMST_run))
+CT_alfa_sol_bal5 = np.zeros((n,TMST_run))
+CT_beta_sol_bal5 = np.zeros((n,TMST_run))
+CT_imp_sol_bal5 = np.zeros(TMST_run)
+CT_exp_sol_bal5 = np.zeros(TMST_run)
+CT_obj_sol_bal5 = np.zeros(TMST_run)
+CT_price_sol_bal5 = np.zeros((n,TMST_run))
+CT_price2_sol_bal5 = np.zeros((3,TMST_run))
 
 uff = np.int32(24*n_days)
 for t in np.arange(0,TMST_run,uff):  # for t = 0, 24
@@ -264,18 +264,18 @@ for t in np.arange(0,TMST_run,uff):  # for t = 0, 24
     CT_m.optimize()
     for k in range(uff):
         for i in range(n):
-            CT_price_sol_bal[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
-            CT_p_sol_bal[i,t+k] = p[k,i].x
-            CT_l_sol_bal[i,t+k] = l[k,i].x
-            CT_q_sol_bal[i,t+k] = q[k,i].x
-            CT_alfa_sol_bal[i,t+k] = alfa[k,i].x
-            CT_beta_sol_bal[i,t+k] = beta[k,i].x
-        CT_price2_sol_bal[0,t+k] = CT_m.getConstrByName("comm[%s]"%k).Pi
-        CT_price2_sol_bal[1,t+k] = CT_m.getConstrByName("imp_bal[%s]"%k).Pi
-        CT_price2_sol_bal[2,t+k] = CT_m.getConstrByName("exp_bal[%s]"%k).Pi
-        CT_imp_sol_bal[t+k] = q_imp[k].x
-        CT_exp_sol_bal[t+k] = q_exp[k].x
+            CT_price_sol_bal5[i,t+k] = CT_m.getConstrByName("pros[%s,%s]"%(k,i)).Pi
+            CT_p_sol_bal5[i,t+k] = p[k,i].x
+            CT_l_sol_bal5[i,t+k] = l[k,i].x
+            CT_q_sol_bal5[i,t+k] = q[k,i].x
+            CT_alfa_sol_bal5[i,t+k] = alfa[k,i].x
+            CT_beta_sol_bal5[i,t+k] = beta[k,i].x
+        CT_price2_sol_bal5[0,t+k] = CT_m.getConstrByName("comm[%s]"%k).Pi
+        CT_price2_sol_bal5[1,t+k] = CT_m.getConstrByName("imp_bal[%s]"%k).Pi
+        CT_price2_sol_bal5[2,t+k] = CT_m.getConstrByName("exp_bal[%s]"%k).Pi
+        CT_imp_sol_bal5[t+k] = q_imp[k].x
+        CT_exp_sol_bal5[t+k] = q_exp[k].x
 # http://www.gurobi.com/documentation/7.5/refman/attributes.html
     del CT_m
 
-CT_IE_sol_bal = CT_imp_sol_bal - CT_exp_sol_bal
+CT_IE_sol_bal5 = CT_imp_sol_bal5 - CT_exp_sol_bal5
